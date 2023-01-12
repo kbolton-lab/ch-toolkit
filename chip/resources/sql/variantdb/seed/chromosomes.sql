@@ -20,3 +20,5 @@ INSERT INTO chromosomes (chrom_id, chrom) VALUES (19, 'chr19');
 INSERT INTO chromosomes (chrom_id, chrom) VALUES (20, 'chr20');
 INSERT INTO chromosomes (chrom_id, chrom) VALUES (21, 'chr21');
 INSERT INTO chromosomes (chrom_id, chrom) VALUES (22, 'chr22');
+INSERT INTO chromosomes (chrom_id, chrom) VALUES (23, 'chrX');
+INSERT INTO chromosomes (chrom_id, chrom) VALUES (24, 'chrY');
