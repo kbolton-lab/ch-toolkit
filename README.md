@@ -18,7 +18,9 @@ A collection of utilities and tools used in the CHIP pipeline.  More details com
 
 #### Ingestion Pipeline
 
-**Goal:** Normalize various sample inputs into either a standardized indexed.bam, or indexed.cram
+| **Goal:** | Normalize various sample inputs into either a standardized input format |
+| **Main Input:**  | FASTQs or unaligned bams |
+| **Main Output:** | An aligned and indexed bam. |
 
     chip-workflow ingestion \
         --input-fastqs fof-of-fastqs.csv \
@@ -28,9 +30,9 @@ A collection of utilities and tools used in the CHIP pipeline.  More details com
 
 #### Alignment and Variant Calling Pipeline
 
-**Goal:** Align and variant call the indexed bam (per sample)
-**Main Input:** An indexed bam.
-**Main Output:** A database of variant calls per sample
+| **Goal:** | Align and variant call the indexed bam (per sample) |
+| **Main Input:** | An indexed bam. |
+| **Main Output:** | A database of variant calls per sample |
 
     chip-workflow align-vc \
         --input-bam indexed.bam \
@@ -40,9 +42,9 @@ A collection of utilities and tools used in the CHIP pipeline.  More details com
 
 #### Panel of Normal (PoN) Computations
 
-**Goal:** Normalize sample inputs into either an indexed.bam _(or indexed.cram)_.
-**Main Input:** A database of sample variants.
-**Main Output:** A database of variant statistics
+| **Goal:** | Normalize sample inputs into either an indexed.bam _(or indexed.cram)_. |
+| **Main Input:** | A database of sample variants. |
+| **Main Output:** | A database of variant statistics |
 
 _(This pipeline could work on a cohort of sample variants for improved performance.)_
 
@@ -55,9 +57,9 @@ _(This pipeline could work on a cohort of sample variants for improved performan
 
 #### Variant Annotations
 
-**Goal:** Annotate a set of variants.
-**Main Input:** A database of variants from 1 or more samples.
-**Main Output:** An updated database of variants from 1 or more samples.
+| **Goal:** | Annotate a set of variants. |
+| **Main Input:** | A database of variants from 1 or more samples. |
+| **Main Output:** | An updated database of variants from 1 or more samples. |
 
 _(This pipeline could work on a cohort of sample variants for improved performance.)_
 
@@ -70,9 +72,9 @@ _(This pipeline could work on a cohort of sample variants for improved performan
 
 #### Machine Learning
 
-**Goal:** Run candidate variants through a ML model
-**Main Input:** A database of variants from 1 or more samples.
-**Main Output:** An updated database of variants from 1 or more samples? (ML model dependent?)
+| **Goal:** | Run candidate variants through a ML model |
+| **Main Input:** | A database of variants from 1 or more samples. |
+| **Main Output:** | An updated database of variants from 1 or more samples? (ML model dependent?) |
 
 _(This pipeline could work on a cohort of sample variants for improved performance.)_
 
@@ -84,9 +86,9 @@ _(This pipeline could work on a cohort of sample variants for improved performan
 
 #### Finalization
 
-**Goal:** Assemble, Clean and Merge any disparate data or files or  Make Final Standarized Reports
-**Main Input:** A database of variants from 1 or more samples.
-**Main Output:** ???
+| **Goal:** | Assemble, Clean and Merge any disparate data or files or  Make Final Standarized Reports |
+| **Main Input:** | A database of variants from 1 or more samples. |
+| **Main Output:** | ??? |
 
 _(This pipeline could work on a cohort of sample variants for improved performance.)_
 
