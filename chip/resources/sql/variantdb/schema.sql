@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS chromosomes
 CREATE TABLE IF NOT EXISTS variants
 (
     variant_id             integer PRIMARY KEY,
-    chrom_id               integer NOT NULL REFEFERENCES chromosomes(chrom_id),
+    chrom_id               integer NOT NULL REFERENCES chromosomes(chrom_id),
     pos                    integer NOT NULL,
     ref                    varchar(255) NOT NULL,
     alt                    varchar(255) NOT NULL,
@@ -27,7 +27,6 @@ CREATE TABLE IF NOT EXISTS variants
     qc_pass                boolean CHECK (qc_pass in (0,1)),
     UNIQUE( chrom_id, pos, ref, alt )
 );
-
 
 CREATE TABLE IF NOT EXISTS pon
 (
@@ -81,8 +80,8 @@ CREATE TABLE IF NOT EXISTS annotate_pd
     case_XXNN                       boolean CHECK (case_XXNN in (0,1)),
     deletion                        varchar(10000),
     deletion_plus_context_3         varchar(10000),
-    case_deletion_in_homopolymer    boolean CHECK (case_deletion_in_homopolymer in (0,1))
-    pass_homopolymer_filter         boolean CHECK (pass_homopolymer_filter in (0,1))
+    case_deletion_in_homopolymer    boolean CHECK (case_deletion_in_homopolymer in (0,1)),
+    pass_homopolymer_filter         boolean CHECK (pass_homopolymer_filter in (0,1)),
     pass_strand_bias_mutect         boolean CHECK (pass_strand_bias_mutect in (0,1)),
     pass_strand_bias_vardict        boolean CHECK (pass_strand_bias_vardict in (0,1)),
     pass_strand_bias_lofreq         boolean CHECK (pass_strand_bias_lofreq in (0,1)),
@@ -105,9 +104,9 @@ CREATE TABLE IF NOT EXISTS annotate_pd
     heme_cosmic_count               integer,
     myeloid_cosmic_count            integer,
     oncoKB                          varchar(30),
-    isOncogenic                     boolean CHECK (isOncogenic in (0,1))
-    isTSG                           boolean CHECK (isTSG in (0,1))
-    isTruncatingHotSpot             boolean CHECK (isTruncatingHotSpot in (0,1))
+    isOncogenic                     boolean CHECK (isOncogenic in (0,1)),
+    isTSG                           boolean CHECK (isTSG in (0,1)),
+    isTruncatingHotSpot             boolean CHECK (isTruncatingHotSpot in (0,1)),
     ch_my_pd                        integer,
     ch_pd                           integer,
     ch_pd2                          integer,
