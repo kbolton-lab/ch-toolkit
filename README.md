@@ -16,23 +16,50 @@ A collection of utilities and tools used in the CHIP pipeline.  More details com
 
 ### Proposed CLI
 
+#### Ingestion Pipeline
+
+**Goal:** Normalize various sample inputs into either a standardized indexed.bam, or indexed.cram
+
     chip-workflow ingestion \
         --input-fastqs fof-of-fastqs.csv \
         --output-directory /path/to/outdir \
         --configs /path/to/other-configs.yaml \
         --jobmgr /path/to/scheduler-configs.yaml
 
+#### Alignment and Variant Calling Pipeline
+
+**Goal:** Align and variant call the indexed bam (per sample)
+**Main Input:** An indexed bam.
+**Main Output:** A database of variant calls per sample
+
     chip-workflow align-vc \
-        --input-bams fof-of-bams.csv \
+        --input-bam indexed.bam \
         --output-directory /path/to/outdir \
         --configs /path/to/other-configs.yaml \
         --jobmgr /path/to/scheduler-configs.yaml
 
+#### Panel of Normal (PoN) Computations
+
+**Goal:** Normalize sample inputs into either an indexed.bam _(or indexed.cram)_.
+**Main Input:** A database of sample variants.
+**Main Output:** A database of variant statistics
+
+_(This pipeline could work on a cohort of sample variants for improved performance.)_
+
     chip-workflow pon-computation \
-        --input-db /path/to/samples.db \
+        --input-variant-db /path/to/samples.db \
+        --input-pon-db /path/to/pon.db \
         --output-directory /path/to/outdir \
         --configs /path/to/other-configs.yaml \
         --jobmgr /path/to/scheduler-configs.yaml
+
+#### Variant Annotations
+
+**Goal:** Annotate a set of variants.
+**Main Input:** A database of variants from 1 or more samples.
+**Main Output:** An updated database of variants from 1 or more samples.
+
+_(This pipeline could work on a cohort of sample variants for improved performance.)_
 
     chip-workflow annotation \
         --input-db /path/to/samples.db \
@@ -41,11 +68,27 @@ A collection of utilities and tools used in the CHIP pipeline.  More details com
         --configs /path/to/other-configs.yaml \
         --jobmgr /path/to/scheduler-configs.yaml
 
+#### Machine Learning
+
+**Goal:** Run candidate variants through a ML model
+**Main Input:** A database of variants from 1 or more samples.
+**Main Output:** An updated database of variants from 1 or more samples? (ML model dependent?)
+
+_(This pipeline could work on a cohort of sample variants for improved performance.)_
+
     chip-workflow ml-model \
         --input-db /path/to/samples.db \
         --output-directory /path/to/outdir \
         --configs /path/to/other-configs.yaml \
         --jobmgr /path/to/scheduler-configs.yaml
+
+#### Finalization
+
+**Goal:** Assemble, Clean and Merge any disparate data or files or  Make Final Standarized Reports
+**Main Input:** A database of variants from 1 or more samples.
+**Main Output:** ???
+
+_(This pipeline could work on a cohort of sample variants for improved performance.)_
 
     chip-workflow finalization \
         --input-db /path/to/samples.db \
