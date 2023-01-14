@@ -25,3 +25,19 @@ def init_db(db_path, sample_name):
     import chip.dbtools.initialize as init
     init.create_db(db_path, sample_name)
     puts(colored.green(f"---> Successfully created variant database ({sample_name}): {db_path}"))
+
+@cli.command('import-vcf', short_help="import a vcf file into sample variant database")
+@click.option('--caller', 'caller',
+              type=click.Choice(['lofreq', 'mutect', 'vardict', 'pindel'], case_sensitive=False),
+              required=True,
+              help="Type of VCF file to import")
+@click.option('--input-vcf', 'input_vcf', type=click.Path(), required=True,
+              help="The VCF to be imported into the database")
+@click.argument('variantdb', nargs=1)
+def import_vcf(caller, input_vcf, variantdb):
+    """
+    variantdb is a path to a sample variant sqlite database.
+    """
+    import chip.dbtools.importer as importer
+    importer.import_vcf(variantdb, input_vcf, caller)
+    puts(colored.green(f"---> Successfully imported ({input_vcf}) into {variantdb}"))
