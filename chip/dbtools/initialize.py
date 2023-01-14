@@ -19,7 +19,11 @@ def create_tables(connection):
 def add_seed_data(connection):
     puts("Populating seed data..")
     resource_dir = importlib.resources.files('chip.resources.sql.variantdb.seed')
-    seed_files = [ 'chromosomes.sql' ]
+    seed_files = [ 'chromosomes.sql',
+                   'fp-filter-types.sql',
+                   'lofreq-filter-types.sql',
+                   'mutect-filter-types.sql',
+                   'vardict-filter-types.sql' ]
     with indent(2):
         for f in seed_files:
             puts(f"Seed: {f}")
