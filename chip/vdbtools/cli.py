@@ -38,6 +38,6 @@ def import_vcf(caller, input_vcf, variantdb):
     """
     variantdb is a path to a sample variant sqlite database.
     """
-    import chip.dbtools.importer as importer
+    import chip.vdbtools.importer as importer
     importer.import_vcf(variantdb, input_vcf, caller)
     puts(colored.green(f"---> Successfully imported ({input_vcf}) into {variantdb}"))
