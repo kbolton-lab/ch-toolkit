@@ -11,6 +11,7 @@ A collection of utilities and tools used in the CHIP pipeline.  More details com
     chip-variant-db dump-vcf --output-vcf=dump.vcf.gz /path/to/sample.db
     chip-variant-db merge-dbs --master-db=/path/to/master.db /path/to/sample.db
     chip-variant-db dump-stats --output-file /path/to/sample.db
+    chip-variant-db update-db --input-vcf=sample1.pon_annotated.vcf.gz /path/to/sample.db
 
 ## Workflow Pipelines (Moonshot Project)
 
