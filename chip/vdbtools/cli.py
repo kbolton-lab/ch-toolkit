@@ -31,9 +31,9 @@ def init_db(db_path, sample_name):
               type=click.Choice(['lofreq', 'mutect', 'vardict', 'pindel'], case_sensitive=False),
               required=True,
               help="Type of VCF file to import")
-@click.option('--input-vcf', 'input_vcf', type=click.Path(), required=True,
+@click.option('--input-vcf', 'input_vcf', type=click.Path(exists=True), required=True,
               help="The VCF to be imported into the database")
-@click.argument('variantdb', nargs=1)
+@click.argument('variantdb', type=click.Path(exists=True), nargs=1)
 def import_vcf(caller, input_vcf, variantdb):
     """
     variantdb is a path to a sample variant sqlite database.
