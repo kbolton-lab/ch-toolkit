@@ -16,7 +16,7 @@ def _process_vcf(input_vcf, redis_db, batch_number):
     for record in reader:
         if counter % 100 == 0:
             puts(f"Processed {counter} variants")
-        (chrom, pos, ref, alt) = (record.CHROM, record.POS, record.REF, record.ALT[0].value)
+        (chrom, pos, ref, alt) = (record.CHROM, str(record.POS), record.REF, record.ALT[0].value)
         key = ':'.join([chrom, pos, ref, alt])
         if redis_db.exists(key):
             puts(f"variant: '{key}' already seen -- skipping")
