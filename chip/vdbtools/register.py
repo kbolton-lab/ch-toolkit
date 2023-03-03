@@ -10,7 +10,7 @@ def _redis_connect(host, port):
 
 def _process_vcf(input_vcf, redis_db, batch_number):
     puts(f"Processing: {input_vcf}")
-    reader = vcfpy.Reader.from_path(vcf_file)
+    reader = vcfpy.Reader.from_path(input_vcf)
     counter = 1
     redis_set = f"new:{batch_number}"
     for record in reader:
