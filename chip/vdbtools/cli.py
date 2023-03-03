@@ -41,3 +41,20 @@ def import_vcf(caller, input_vcf, variantdb):
     import chip.vdbtools.importer as importer
     importer.import_vcf(variantdb, input_vcf, caller)
     puts(colored.green(f"---> Successfully imported ({input_vcf}) into {variantdb}"))
+
+@cli.command('register-variants', short_help="register the variants in vcf file into redis")
+@click.option('--input-vcf', 'input_vcf', type=click.Path(exists=True), required=True,
+              help="The VCF to be imported into redis")
+@click.option('--redis-host', type=click.STRING, required=True,
+              help="The hostname of the redis server")
+@click.option('--redis-port', type=click.IntRange(min=8000, max=8999), required=True,
+              help="The port of the redis server")
+@click.option('--batch-number', type=click.INT, required=True,
+              help="The batch number of this import set")
+def register_variants(input_vcf, redis_host, redis_port, batch_number):
+    """
+    variantdb is a path to a sample variant sqlite database.
+    """
+    import chip.vdbtools.register as register
+    register.import_vcf(input_vcf, redis_host, redis_port, batch_number)
+    puts(colored.green(f"---> Successfully imported ({input_vcf}) into {redis_host}"))
