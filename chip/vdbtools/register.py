@@ -6,6 +6,7 @@ import vcfpy
 
 def _redis_connect(host, port):
     r = redis.Redis(host=host, port=port, db=0)
+    return r
 
 def _process_vcf(input_vcf, redis_db, batch_number):
     puts(f"Processing: {input_vcf}")
