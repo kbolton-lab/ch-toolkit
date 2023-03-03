@@ -21,7 +21,7 @@ def _process_vcf(input_vcf, redis_db, batch_number):
         if redis_db.exists(key):
             puts(f"variant: '{key}' already seen -- skipping")
         else:
-            pipe = r.pipeline()
+            pipe = redis_db.pipeline()
             variant_id = pipe.get('variant_id')
             pipe.set(key, variant_id)
             pipe.incr(key)
