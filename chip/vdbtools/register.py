@@ -21,13 +21,14 @@ def _process_vcf(input_vcf, redis_db, batch_number):
         if redis_db.exists(key):
             puts(f"variant: '{key}' already seen -- skipping")
         else:
+            int(variant_id) = redis_db.get('variant_id')
             pipe = redis_db.pipeline()
-            variant_id = pipe.get('variant_id')
+            pipe.watch('variant_id')
             pipe.set(key, variant_id)
-            pipe.incr(key)
+            pipe.incr('variant_id')
             pipe.sadd(redis_set, key)
-            pipe.execute()
-            puts(f"variant: '{key}' adding to redis -- {variant_id}")
+            vals = pipe.execute()
+            puts(f"variant: '{key}' adding to redis -- {variant_id} -- {vals}")
         counter += 1
 
 def check_global_variant_counter(redis_db):
