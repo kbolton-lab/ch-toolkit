@@ -25,8 +25,8 @@ def _process_vcf(input_vcf, redis_db, batch_number):
             pipe = redis_db.pipeline()
             pipe.watch('variant_id')
             pipe.set(key, variant_id)
-            pipe.set('variant_id', variant_id + 1)
             pipe.sadd(redis_set, key)
+            pipe.incr('variant_id')
             vals = pipe.execute()
             puts(f"variant: '{key}' adding to redis -- {variant_id} -- {vals}")
         counter += 1
