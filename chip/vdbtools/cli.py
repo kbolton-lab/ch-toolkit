@@ -3,6 +3,7 @@ import click
 from clint.textui import puts, colored
 
 from chip.version import __version__
+import chip.utils.logger as log
 
 CONTEXT_SETTINGS = dict(help_option_names=['-h', '--help'])
 
@@ -42,19 +43,21 @@ def import_vcf(caller, input_vcf, variantdb):
     importer.import_vcf(variantdb, input_vcf, caller)
     puts(colored.green(f"---> Successfully imported ({input_vcf}) into {variantdb}"))
 
-@cli.command('register-variants', short_help="register the variants in vcf file into redis")
-@click.option('--input-vcf', 'input_vcf', type=click.Path(exists=True), required=True,
+@cli.command('register-variants', short_help="register the variants in a vcf file into redis")
+@click.option('--input-vcf', '-i', 'input_vcf', type=click.Path(exists=True), required=True,
               help="The VCF to be imported into redis")
-@click.option('--redis-host', type=click.STRING, required=True,
+@click.option('--redis-host', '-h', type=click.STRING, required=True,
               help="The hostname of the redis server")
-@click.option('--redis-port', type=click.IntRange(min=8000, max=8999), required=True,
+@click.option('--redis-port', '-p', type=click.IntRange(min=8000, max=8999), required=True,
               help="The port of the redis server")
-@click.option('--batch-number', type=click.INT, required=True,
+@click.option('--batch-number', '-b', type=click.INT, required=True,
               help="The batch number of this import set")
-def register_variants(input_vcf, redis_host, redis_port, batch_number):
+@click.option('--debug', '-d', is_flag=True, show_default=True, default=False, required=True,
+              help="Print extra debugging output")
+def register_variants(input_vcf, redis_host, redis_port, batch_number, debug):
     """
-    variantdb is a path to a sample variant sqlite database.
+    Registering variants into a redis database.
     """
     import chip.vdbtools.register as register
-    register.import_vcf(input_vcf, redis_host, redis_port, batch_number)
-    puts(colored.green(f"---> Successfully imported ({input_vcf}) into {redis_host}"))
+    register.import_vcf(input_vcf, redis_host, redis_port, batch_number, debug)
+    log.logit(f"---> Successfully imported ({input_vcf}) into redis://{redis_host}:{redis_port}", color="green")
