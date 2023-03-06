@@ -61,3 +61,23 @@ def register_variants(input_vcf, redis_host, redis_port, batch_number, debug):
     import chip.vdbtools.register as register
     register.import_vcf(input_vcf, redis_host, redis_port, batch_number, debug)
     log.logit(f"---> Successfully imported ({input_vcf}) into redis://{redis_host}:{redis_port}", color="green")
+
+@cli.command('ingest-variants', short_help="ingest the variants in a batch from redis into duckdb")
+@click.option('--db', '-i', 'database', type=click.Path(exists=True), required=True,
+              help="The duckdb database to import the variant set from redis")
+@click.option('--redis-host', '-h', type=click.STRING, required=True,
+              help="The hostname of the redis server")
+@click.option('--redis-port', '-p', type=click.IntRange(min=8000, max=8999), required=True,
+              help="The port of the redis server")
+@click.option('--batch-number', '-b', type=click.INT, required=True,
+              help="The batch number of this import set")
+@click.option('--debug', '-d', is_flag=True, show_default=True, default=False, required=True,
+              help="Print extra debugging output")
+def ingest_variants(database, redis_host, redis_port, batch_number, debug):
+    """
+    Ingest the variants in a batch from redis into duckdb's variant table
+    """
+    pass
+#    import chip.vdbtools.ingest.variants as ingest
+#    register.import_vcf(input_vcf, redis_host, redis_port, batch_number, debug)
+#    log.logit(f"---> Successfully imported variant batch ({batch_number}) into {database}", color="green")
