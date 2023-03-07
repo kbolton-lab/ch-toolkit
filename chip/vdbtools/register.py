@@ -27,7 +27,6 @@ def _process_vcf(input_vcf, redis_db, batch_number, debug):
             time.sleep(2)
             pipe = redis_db.pipeline()
             pipe.watch('variant_id')
-            pipe.multi()
             pipe.sadd(redis_set, key)
             pipe.incr('variant_id')
             pipe.copy('variant_id', key)
