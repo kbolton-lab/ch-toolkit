@@ -1,8 +1,8 @@
-import sys
+import sys, time
 
 import chip.utils.logger as log
 
-from clint.textui import indent, puts_err
+from clint.textui import indent, puts_err, puts
 import redis
 import vcfpy
 
@@ -25,6 +25,7 @@ def _process_vcf(input_vcf, redis_db, batch_number, debug):
             seen += 1
         else:
             variant_id = int(redis_db.get('variant_id'))
+            time.sleep(2)
             pipe = redis_db.pipeline()
             pipe.watch('variant_id')
             pipe.set(key, variant_id)
@@ -34,7 +35,7 @@ def _process_vcf(input_vcf, redis_db, batch_number, debug):
             vals = pipe.execute()
             if debug: puts_err(f"variant: '{key}' => {variant_id}")
             new += 1
-        counter += 1
+        total += 1
     return { 'total' : total, 'new' : new, 'seen' : seen }
 
 def check_global_variant_counter(redis_db, start=1):
