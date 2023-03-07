@@ -24,15 +24,15 @@ def _process_vcf(input_vcf, redis_db, batch_number, debug):
             if debug: puts_err(f"variant: '{key}' already seen -- skipping")
             seen += 1
         else:
-            variant_id = int(redis_db.get('variant_id'))
             time.sleep(2)
             pipe = redis_db.pipeline()
             pipe.watch('variant_id')
-            pipe.set(key, variant_id)
-            pipe.sadd(redis_set, key)
             pipe.multi()
+            pipe.sadd(redis_set, key)
             pipe.incr('variant_id')
+            pipe.copy('variant_id', key)
             vals = pipe.execute()
+            variant_id = redis_db.get(key)
             if debug: puts_err(f"variant: '{key}' => {variant_id}")
             new += 1
         total += 1
