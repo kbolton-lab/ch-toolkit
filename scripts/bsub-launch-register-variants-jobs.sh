@@ -41,50 +41,50 @@ i=0
 for vcf in ${MUTECT_VCFS[@]}; do
     sample=$(basename $(dirname ${vcf}))
     job_name="${sample}.mutect.batch.${BATCH}.${ATTEMPT}"
-#    log_dir=${ROOT_LOG_DIR}/mutect/${sample}
-#    mkdir -p ${log_dir}
-#    logfile="${log_dir}/%J.log"
+    log_dir=${ROOT_LOG_DIR}/mutect/${sample}
+    mkdir -p ${log_dir}
+    logfile="${log_dir}/%J.log"
     log "[ ${i} | ${NUM_MUTECT}] Processing VCF: ${vcf}"
     log "Sample: ${sample}"
-#    log "Log Directory: ${log_dir}"
-#    log "LSF Job Name: ${job_name}"
-#    LSF_DOCKER_VOLUMES=
-#      bsub \
-#      -Is \
-#      -J ${job_name} \
-#      -M ${MEMORY} \
-#      -R "${RUSAGE} ${SELECT} ${SPAN}" \
-#      -G ${COMPUTE_GROUP} \
-#      -q ${QUEUE} \
-#      -a "${DOCKER_IMAGE}" \
-#      -o ${logfile} \
-#      ${SCRIPT} ${BATCH} ${VCF} ${REDIS_HOST} ${REDIS_PORT}
-      ((i += 1))
+    log "Log Directory: ${log_dir}"
+    log "LSF Job Name: ${job_name}"
+    LSF_DOCKER_VOLUMES=
+      bsub \
+      -Is \
+      -J ${job_name} \
+      -M ${MEMORY} \
+      -R "${RUSAGE} ${SELECT} ${SPAN}" \
+      -G ${COMPUTE_GROUP} \
+      -q ${QUEUE} \
+      -a "${DOCKER_IMAGE}" \
+      -o ${logfile} \
+      ${SCRIPT} ${BATCH} ${VCF} ${REDIS_HOST} ${REDIS_PORT}
+     ((i += 1))
 done
 
-# "===> Submitting vardict vcfs <==="
-# 
-# i=0
-# for vcf in ${VARDICT_VCFS[@]}; do
-#     sample=$(basename $(dirname ${vcf}))
-#     job_name="${sample}.vardict.batch.${BATCH}.${ATTEMPT}"
-# #    log_dir=${ROOT_LOG_DIR}/mutect/${sample}
-# #    mkdir -p ${log_dir}
-# #    logfile="${log_dir}/%J.log"
-#     log "[ ${i} | ${NUM_VARDICT}] Processing VCF: ${vcf}"
-#     log "Sample: ${sample}"
-# #    log "Log Directory: ${log_dir}"
-# #    log "LSF Job Name: ${job_name}"
-# #    LSF_DOCKER_VOLUMES=
-# #      bsub \
-# #      -Is \
-# #      -J ${job_name} \
-# #      -M ${MEMORY} \
-# #      -R "${RUSAGE} ${SELECT} ${SPAN}" \
-# #      -G ${COMPUTE_GROUP} \
-# #      -q ${QUEUE} \
-# #      -a "${DOCKER_IMAGE}" \
-# #      -o ${logfile} \
-# #      ${SCRIPT} ${BATCH} ${VCF} ${REDIS_HOST} ${REDIS_PORT}
-#       ((i += 1))
-# done
+"===> Submitting vardict vcfs <==="
+
+i=0
+for vcf in ${VARDICT_VCFS[@]}; do
+    sample=$(basename $(dirname ${vcf}))
+    job_name="${sample}.vardict.batch.${BATCH}.${ATTEMPT}"
+    log_dir=${ROOT_LOG_DIR}/mutect/${sample}
+    mkdir -p ${log_dir}
+    logfile="${log_dir}/%J.log"
+    log "[ ${i} | ${NUM_VARDICT}] Processing VCF: ${vcf}"
+    log "Sample: ${sample}"
+    log "Log Directory: ${log_dir}"
+    log "LSF Job Name: ${job_name}"
+    LSF_DOCKER_VOLUMES=
+      bsub \
+      -Is \
+      -J ${job_name} \
+      -M ${MEMORY} \
+      -R "${RUSAGE} ${SELECT} ${SPAN}" \
+      -G ${COMPUTE_GROUP} \
+      -q ${QUEUE} \
+      -a "${DOCKER_IMAGE}" \
+      -o ${logfile} \
+      ${SCRIPT} ${BATCH} ${VCF} ${REDIS_HOST} ${REDIS_PORT}
+      ((i += 1))
+done
