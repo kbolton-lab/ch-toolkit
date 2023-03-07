@@ -33,7 +33,7 @@ def _process_vcf(input_vcf, redis_db, batch_number, debug):
             pipe.copy('variant_id', key)
             vals = pipe.execute()
             variant_id = redis_db.get(key)
-            if debug: puts_err(f"variant: '{key}' => {variant_id}")
+            if debug: puts_err(f"variant: '{key}' => {variant_id} [{vals}]")
             new += 1
         total += 1
     return { 'total' : total, 'new' : new, 'seen' : seen }
