@@ -38,7 +38,7 @@ def _process_vcf(input_vcf, redis_db, batch_number, debug):
         total += 1
     return { 'total' : total, 'new' : new, 'seen' : seen }
 
-def check_global_variant_counter(redis_db, start=1):
+def check_global_variant_counter(redis_db, start=0):
     if not redis_db.exists('variant_id'):
         log.logit(f"Creating the variant id global counter: variant_id={start}", color="yellow")
         redis_db.set('variant_id', start)
