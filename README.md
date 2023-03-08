@@ -1,6 +1,6 @@
 # CHIP Toolkit
 
-A collection of utilities and tools used in the CHIP pipeline.  More details coming soon!
+A collection of utilities and tools used in the Clonal Hematopoiesis of Indeterminate Potential (CHIP) pipeline.  More details coming soon!
 
 ## Database Management
 
