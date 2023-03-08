@@ -7,6 +7,13 @@ function log {
     echo "---> [ ${timestamp} ] $@" >&2
 }
 
+
+REDIS_HOST=compute1-exec-120.ris.wustl.edu
+REDIS_PORT=8999
+
+BATCH=1
+ATTEMPT=1
+
 # LSF Job Parameters
 DOCKER_IMAGE='docker(indraniel/bolton-db-toolkit:v1)'
 MEMORY=2GB
@@ -19,13 +26,7 @@ SCRIPT=${SCRIPT_DIR}/register-variants.sh
 
 export LSF_DOCKER_VOLUMES="/home/$USER:/home/$USER /storage1/fs1/bolton/Active:/storage1/fs1/bolton/Active /scratch1/fs1/bolton:/scratch1/fs1/bolton"
 
-# Registration Command Parameters
-BATCH=1
-ATTEMPT=1
-
-REDIS_HOST=compute1-exec-130.ris.wustl.edu
-REIDS_PORT=8999
-
+# input vcf gathering
 VCF_ROOT_DIR=/storage1/fs1/bolton/Active/Projects/chip-toolkit/data/TERRA_Data
 MUTECT_VCFS=$(find ${VCF_ROOT_DIR} -name "mutect.*.vcf.gz" -print)
 NUM_MUTECT=${#MUTECT_VCFS[@]}
