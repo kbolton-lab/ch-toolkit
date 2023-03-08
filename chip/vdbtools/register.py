@@ -24,7 +24,6 @@ def _process_vcf(input_vcf, redis_db, batch_number, debug):
             if debug: puts_err(f"variant: '{key}' already seen -- skipping")
             seen += 1
         else:
-            time.sleep(2)
             pipe = redis_db.pipeline()
             enter = time.strftime("[ %Y-%m-%d %T ]", datetime.datetime.now().timetuple())
             pipe.sadd(redis_set, key)
