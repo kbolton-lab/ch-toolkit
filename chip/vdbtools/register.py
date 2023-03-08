@@ -25,14 +25,14 @@ def _process_vcf(input_vcf, redis_db, batch_number, debug):
             seen += 1
         else:
             pipe = redis_db.pipeline()
-            enter = time.strftime("[ %Y-%m-%d %T ]", datetime.datetime.now().timetuple())
+            enter = time.strftime("( %Y-%m-%d %T.%f )", datetime.datetime.now().timetuple())
             pipe.sadd(redis_set, key)
             pipe.incr('variant_id')
             pipe.copy('variant_id', key)
             vals = pipe.execute()
-            out = time.strftime("[ %Y-%m-%d %T ]", datetime.datetime.now().timetuple())
+            out = time.strftime("( %Y-%m-%d %T.%f )", datetime.datetime.now().timetuple())
             variant_id = redis_db.get(key)
-            if debug: puts_err(f"variant: '{key}' => {variant_id} [{vals}] -- {enter} | {out}")
+            if debug: puts_err(f"variant: '{key}' => {variant_id} - pipeline[{vals}] -- enter pipline: {enter} | exec pipeline: {out}")
             new += 1
         total += 1
     return { 'total' : total, 'new' : new, 'seen' : seen }
