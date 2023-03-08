@@ -34,7 +34,7 @@ NUM_VARDICT=${#VARDICT_VCFS[@]}
 
 ROOT_LOG_DIR=/scratch1/fs1/bolton/idas/variant-registration-logs
 
-"===> Submitting mutect vcfs <==="
+echo "===> Submitting mutect vcfs <==="
 
 i=0
 for vcf in ${MUTECT_VCFS[@]}; do
@@ -61,7 +61,7 @@ for vcf in ${MUTECT_VCFS[@]}; do
      ((i += 1))
 done
 
-"===> Submitting vardict vcfs <==="
+echo "===> Submitting vardict vcfs <==="
 
 i=0
 for vcf in ${VARDICT_VCFS[@]}; do
