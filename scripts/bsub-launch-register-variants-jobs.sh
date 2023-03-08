@@ -9,7 +9,7 @@ function log {
 
 # LSF Job Parameters
 DOCKER_IMAGE='docker(indraniel/bolton-db-toolkit:v1)'
-MEMORY=4GB
+MEMORY=2GB
 RUSAGE="rusage[mem=${MEMORY}]"
 SELECT="select[mem>32GB]"
 SPAN='span[hosts=1]'
