@@ -9,13 +9,12 @@ function log {
 
 # LSF Job Parameters
 DOCKER_IMAGE='docker(indraniel/bolton-db-toolkit:v1)'
-MEMORY=30GB
-TMP_SPACE=30
-RUSAGE="rusage[mem=${MEMORY},tmp=${TMP_SPACE}]"
-SELECT="select[mem>32GB && tmp>${TMP_SPACE}]"
+MEMORY=4GB
+RUSAGE="rusage[mem=${MEMORY}]"
+SELECT="select[mem>32GB]"
 SPAN='span[hosts=1]'
 COMPUTE_GROUP='compute-bolton'
-QUEUE='general-interactive'
+QUEUE='general'
 SCRIPT=${SCRIPT_DIR}/register-variants.sh
 
 export LSF_DOCKER_VOLUMES="/home/$USER:/home/$USER /storage1/fs1/bolton/Active:/storage1/fs1/bolton/Active /scratch1/fs1/bolton:/scratch1/fs1/bolton"
