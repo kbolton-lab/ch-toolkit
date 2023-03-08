@@ -6,7 +6,7 @@ SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 BATCH=$1
 IN_VCF=$2
 REDIS_HOST=$3
-REIDS_PORT=$4
+REDIS_PORT=$4
 
 # Command
 VIRTUALENV=${SCRIPT_DIR}/../venv
