@@ -14,7 +14,7 @@ BASE_CMD=${VIRTUALENV}/bin/chip-variant-db
 
 # Redis
 
-${BASE_CMD} \
+${BASE_CMD} register-variants \
     --input-vcf=${IN_VCF} \
     --redis-host=${REDIS_HOST} \
     --redis-port=${REDIS_PORT} \
