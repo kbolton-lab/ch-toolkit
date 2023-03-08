@@ -47,9 +47,8 @@ for vcf in ${MUTECT_VCFS[@]}; do
     log "Sample: ${sample}"
     log "Log Directory: ${log_dir}"
     log "LSF Job Name: ${job_name}"
-    LSF_DOCKER_VOLUMES=
+    set -o xtrace;
       bsub \
-      -Is \
       -J ${job_name} \
       -M ${MEMORY} \
       -R "${RUSAGE} ${SELECT} ${SPAN}" \
@@ -57,8 +56,9 @@ for vcf in ${MUTECT_VCFS[@]}; do
       -q ${QUEUE} \
       -a "${DOCKER_IMAGE}" \
       -o ${logfile} \
-      ${SCRIPT} ${BATCH} ${VCF} ${REDIS_HOST} ${REDIS_PORT}
-     ((i += 1))
+      /bin/bash ${SCRIPT} ${BATCH} ${vcf} ${REDIS_HOST} ${REDIS_PORT}
+    set +o xtrace;
+    ((i += 1))
 done
 
 echo "===> Submitting vardict vcfs <==="
@@ -74,9 +74,8 @@ for vcf in ${VARDICT_VCFS[@]}; do
     log "Sample: ${sample}"
     log "Log Directory: ${log_dir}"
     log "LSF Job Name: ${job_name}"
-    LSF_DOCKER_VOLUMES=
+    set -o xtrace;
       bsub \
-      -Is \
       -J ${job_name} \
       -M ${MEMORY} \
       -R "${RUSAGE} ${SELECT} ${SPAN}" \
@@ -84,6 +83,7 @@ for vcf in ${VARDICT_VCFS[@]}; do
       -q ${QUEUE} \
       -a "${DOCKER_IMAGE}" \
       -o ${logfile} \
-      ${SCRIPT} ${BATCH} ${VCF} ${REDIS_HOST} ${REDIS_PORT}
+      /bin/bash ${SCRIPT} ${BATCH} ${vcf} ${REDIS_HOST} ${REDIS_PORT}
+    set +o xtrace;
       ((i += 1))
 done
