@@ -18,7 +18,7 @@ ATTEMPT=1
 DOCKER_IMAGE='docker(indraniel/bolton-db-toolkit:v1)'
 MEMORY=2GB
 RUSAGE="rusage[mem=${MEMORY}]"
-SELECT="select[mem>32GB && hname!=${REDIS_HOST}]"
+SELECT="select[mem>32GB && hname!='${REDIS_HOST}']"
 SPAN='span[hosts=1]'
 COMPUTE_GROUP='compute-bolton'
 QUEUE='general'
