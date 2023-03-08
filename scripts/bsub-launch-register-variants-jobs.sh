@@ -67,7 +67,7 @@ i=0
 for vcf in ${VARDICT_VCFS[@]}; do
     sample=$(basename $(dirname ${vcf}))
     job_name="${sample}.vardict.batch.${BATCH}.${ATTEMPT}"
-    log_dir=${ROOT_LOG_DIR}/mutect/${sample}
+    log_dir=${ROOT_LOG_DIR}/vardict/${sample}
     mkdir -p ${log_dir}
     logfile="${log_dir}/%J.log"
     log "[ ${i} | ${NUM_VARDICT}] Processing VCF: ${vcf}"
