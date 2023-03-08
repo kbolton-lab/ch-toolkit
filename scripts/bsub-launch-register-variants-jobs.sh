@@ -28,9 +28,9 @@ export LSF_DOCKER_VOLUMES="/home/$USER:/home/$USER /storage1/fs1/bolton/Active:/
 
 # input vcf gathering
 VCF_ROOT_DIR=/storage1/fs1/bolton/Active/Projects/chip-toolkit/data/TERRA_Data
-MUTECT_VCFS=$(find ${VCF_ROOT_DIR} -name "mutect.*.vcf.gz" -print)
+MUTECT_VCFS=($(find ${VCF_ROOT_DIR} -name "mutect.*.vcf.gz" -print))
 NUM_MUTECT=${#MUTECT_VCFS[@]}
-VARDICT_VCFS=$(find ${VCF_ROOT_DIR} -name "vardict.*.vcf.gz" -print)
+VARDICT_VCFS=($(find ${VCF_ROOT_DIR} -name "vardict.*.vcf.gz" -print))
 NUM_VARDICT=${#VARDICT_VCFS[@]}
 
 ROOT_LOG_DIR=/scratch1/fs1/bolton/idas/variant-registration-logs
