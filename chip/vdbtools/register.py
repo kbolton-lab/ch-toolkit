@@ -16,7 +16,7 @@ def _process_vcf(input_vcf, redis_db, batch_number, debug):
     (total, new, seen) = (0, 0, 0)
     redis_set = f"batch:{batch_number}"
     for record in reader:
-        if total % 1000 == 0:
+        if total % 100000 == 0:
             log.logit(f"variants processed - total: {total} | new: {new} | seen: {seen}")
         (chrom, pos, ref, alt) = (record.CHROM, str(record.POS), record.REF, record.ALT[0].value)
         key = ':'.join([chrom, pos, ref, alt])
