@@ -22,6 +22,7 @@ SELECT="select[mem>32GB && hname!='${REDIS_HOST}']"
 SPAN='span[hosts=1]'
 COMPUTE_GROUP='compute-bolton'
 QUEUE='general'
+JOB_GROUP='/idas/max-20'
 SCRIPT=${SCRIPT_DIR}/register-variants.sh
 
 export LSF_DOCKER_VOLUMES="/home/$USER:/home/$USER /storage1/fs1/bolton/Active:/storage1/fs1/bolton/Active /scratch1/fs1/bolton:/scratch1/fs1/bolton"
@@ -54,6 +55,7 @@ for vcf in ${MUTECT_VCFS[@]}; do
       -M ${MEMORY} \
       -R "${RUSAGE} ${SELECT} ${SPAN}" \
       -G ${COMPUTE_GROUP} \
+      -g ${JOB_GROUP} \
       -q ${QUEUE} \
       -a "${DOCKER_IMAGE}" \
       -o ${logfile} \
@@ -81,6 +83,7 @@ for vcf in ${VARDICT_VCFS[@]}; do
       -M ${MEMORY} \
       -R "${RUSAGE} ${SELECT} ${SPAN}" \
       -G ${COMPUTE_GROUP} \
+      -g ${JOB_GROUP} \
       -q ${QUEUE} \
       -a "${DOCKER_IMAGE}" \
       -o ${logfile} \
