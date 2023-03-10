@@ -63,10 +63,10 @@ def _insert_variants(redis_db, duckdb_connection, batch_number, debug):
     log.logit(f"Total # of variants to insert in batch {batch_number}: {total_variants}")
     log.logit("Inserting batch variants into duckdb variants table")
     with indent(4, quote=' >'):
-    for (i, key) in enumerate(redis_db.sscan_iter(redis_set_key)):
-        if i % 500000 == 0:
-            log.logit(f"# Variants Processed: {i}")
-        #puts(key.decode())
+        for (i, key) in enumerate(redis_db.sscan_iter(redis_set_key)):
+            if i % 500000 == 0:
+                log.logit(f"# Variants Processed: {i}")
+            #puts(key.decode())
 
 def ingest_variant_batch(duckdb_file, redis_host, redis_port, batch_number, debug):
     log.logit(f"Ingesting variants from redis batch: {batch_number} into {duckdb_file}", color="green")
