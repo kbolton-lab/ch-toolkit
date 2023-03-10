@@ -23,3 +23,7 @@ def import_vardict(db_path, input_vcf):
 
 def import_pindel(db_path, input_vcf):
     sys.exit("[err] Please implement me -- import_pindel !")
+
+def import_variant_batch(duckdb_file, redis_host, redis_port, batch_number, debug):
+    import chip.vdbtools.importer.variants as variants
+    variants.ingest_variant_batch(duckdb, redis_host, redis_port, batch_number, debug)

@@ -1,14 +1,10 @@
 import sys, time, datetime
 
 import chip.utils.logger as log
+import chip.utils.redis as redis
 
 from clint.textui import indent, puts_err, puts
-import redis
 import vcfpy
-
-def _redis_connect(host, port):
-    r = redis.Redis(host=host, port=port, db=0)
-    return r
 
 def _process_vcf(input_vcf, redis_db, batch_number, debug):
     puts(f"Processing: {input_vcf}")
@@ -45,7 +41,7 @@ def check_global_variant_counter(redis_db, start=0):
 def import_vcf(input_vcf, redis_host, redis_port, batch_number, debug):
     log.logit(f"Registering variants from file: {input_vcf}", color="green")
     with indent(4, quote=' >'):
-        redis_db = _redis_connect(redis_host, redis_port)
+        redis_db = redis.redis_connect(redis_host, redis_port)
         check_global_variant_counter(redis_db)
         counts = _process_vcf(input_vcf, redis_db, batch_number, debug)
     log.logit(f"Finished registering variants")
