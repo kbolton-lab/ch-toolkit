@@ -78,5 +78,5 @@ def ingest_variants(database, redis_host, redis_port, batch_number, debug):
     Ingest the variants in a batch from redis into duckdb's variant table
     """
     import chip.vdbtools.importer as importer
-    importer.import_variant_batch(input_vcf, redis_host, redis_port, batch_number, debug)
+    importer.import_variant_batch(database, redis_host, redis_port, batch_number, debug)
     log.logit(f"---> Successfully imported variant batch ({batch_number}) into {database}", color="green")

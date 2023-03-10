@@ -57,11 +57,11 @@ def _setup_variants_table(duckdb_file):
     return connection
 
 def _insert_variants(redis_db, duckdb_connection, batch_number, debug):
-    log.logit("Starting to ingest variants in batch: {batch_number}")
-    redis_set_key = "batch:{batch_number}"
+    log.logit(f"Starting to ingest variants in batch: {batch_number}")
+    redis_set_key = f"batch:{batch_number}"
     total_variants = int(redis_db.scard(redis_set_key))
-    log.logit("Total # of variants to insert in batch {batch_number}: {total_variants}")
-    for (i, key) in enumerate(r.sscan_iter(redis_set_key)):
+    log.logit(f"Total # of variants to insert in batch {batch_number}: {total_variants}")
+    for (i, key) in enumerate(redis_db.sscan_iter(redis_set_key)):
         print(key.decode())
 
 def ingest_variant_batch(duckdb_file, redis_host, redis_port, batch_number, debug):
