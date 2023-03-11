@@ -16,7 +16,7 @@ def _ensure_variants_table(connection):
 			qc_pass                BOOLEAN,
 			batch_id               INTEGER,
             start                  INTEGER,
-            end                    INTEGER
+            stop                   INTEGER
         )
     """
     connection.execute(sql)
@@ -54,16 +54,16 @@ def _create_indexes(connection):
         """
         connection.execute(sql)
 
-def _setup_variants_table(duckdb_file):
-    log.logit("Preparing the variant database file: {duckdb_file}")
+def _setup_variants_table(connection):
+    log.logit("Preparing the variant database file")
     _ensure_variants_table(connection)
     _drop_indexes(connection)
     return connection
 
 def _bulk_insert(duckdb_connection, entries):
-    sql = "insert into variants ( variant_id, chrom, pos, ref, alt, batch_id, start, end ) values ( ?, ?, ?, ?, ?, ?, ?, ?)"
+    sql = "insert into variants ( variant_id, chrom, pos, ref, alt, batch_id, start, stop ) values ( ?, ?, ?, ?, ?, ?, ?, ?)"
     log.logit(f"Starting to bulk insert variant batch into duckdb ( {len(entries)} items)")
-    duckdb_connection.executemany(sql, entries)
+    duckdb.executemany(sql, entries, duckdb_connection)
     log.logit(f"Finished DuckDB insertion")
 
 def _insert_variants(redis_db, duckdb_connection, batch_number, debug):
@@ -79,9 +79,13 @@ def _insert_variants(redis_db, duckdb_connection, batch_number, debug):
             (chrom, pos, ref, alt) = key.decode().split(':')
             pos = int(pos)
             start = pos
-            end = start + len(alt)
-            variant_batch.append( (variant_id, chrom, pos, ref, alt, batch_number, start, end) )
-            if i % 500000 == 0:
+            stop = start + len(alt)
+            item = (variant_id, chrom, pos, ref, alt, batch_number, start, stop)
+            variant_batch.append( item )
+            if debug: log.logit(f"{i} -- {item}")
+            if i % 25000 == 0 and i != 0:
+#            if i % 1 == 0 and i != 0:
+#                import pdb; pdb.set_trace()
                 _bulk_insert(duckdb_connection, variant_batch)
                 log.logit(f"# Variants Processed: {i}")
                 variant_batch = []
@@ -89,7 +93,7 @@ def _insert_variants(redis_db, duckdb_connection, batch_number, debug):
         if len(variant_batch) > 0:
             _bulk_insert(duckdb_connection, variant_batch)
 
-    return { 'counts: total_variants }
+    return { 'counts': total_variants }
 
 def ingest_variant_batch(duckdb_file, redis_host, redis_port, batch_number, debug):
     log.logit(f"Ingesting variants from redis batch: {batch_number} into {duckdb_file}", color="green")
