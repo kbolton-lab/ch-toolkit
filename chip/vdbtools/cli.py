@@ -63,7 +63,7 @@ def register_variants(input_vcf, redis_host, redis_port, batch_number, debug):
     log.logit(f"---> Successfully imported ({input_vcf}) into redis://{redis_host}:{redis_port}", color="green")
 
 @cli.command('ingest-variants', short_help="ingest the variants in a batch from redis into duckdb")
-@click.option('--db', '-i', 'database', type=click.Path(exists=True), required=True,
+@click.option('--db', '-i', 'database', type=click.Path(), required=True,
               help="The duckdb database to import the variant set from redis")
 @click.option('--redis-host', '-h', type=click.STRING, required=True,
               help="The hostname of the redis server")
@@ -71,12 +71,18 @@ def register_variants(input_vcf, redis_host, redis_port, batch_number, debug):
               help="The port of the redis server")
 @click.option('--batch-number', '-b', type=click.INT, required=True,
               help="The batch number of this import set")
+@click.option('--chromosome', '-c', type=click.STRING, default=None,
+              help="The chromosome set of interest")
+@click.option('--clobber', '-f', is_flag=True, show_default=True, default=False, required=True,
+              help="If exists, delete existing duckdb file and then start from scratch")
+@click.option('--work-dir', '-d', type=click.Path(exists=True), default="/tmp", show_default=True, required=False,
+              help="The the working directory to create temporary files (usually the OS temp directory)")
 @click.option('--debug', '-d', is_flag=True, show_default=True, default=False, required=True,
               help="Print extra debugging output")
-def ingest_variants(database, redis_host, redis_port, batch_number, debug):
+def ingest_variants(database, redis_host, redis_port, batch_number, chromosome, clobber, work_dir, debug):
     """
     Ingest the variants in a batch from redis into duckdb's variant table
     """
     import chip.vdbtools.importer as importer
-    importer.import_variant_batch(database, redis_host, redis_port, batch_number, debug)
+    importer.import_variant_batch(database, redis_host, redis_port, batch_number, chromosome, clobber, work_dir, debug)
     log.logit(f"---> Successfully imported variant batch ({batch_number}) into {database}", color="green")
