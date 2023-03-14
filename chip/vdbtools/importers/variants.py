@@ -52,7 +52,7 @@ def create_indexes(connection):
 
         log.logit("Generating the batch_idx")
         sql = """
-            CREATE UNIQUE INDEX batch_idx
+            CREATE INDEX batch_idx
             ON variants ( batch )
         """
         connection.execute(sql)
