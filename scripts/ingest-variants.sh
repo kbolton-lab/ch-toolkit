@@ -16,7 +16,7 @@ BASE_CMD=${VIRTUALENV}/bin/chip-variant-db
 # Redis
 
 ${BASE_CMD} ingest-variants \
-    --db=${IN_VCF} \
+    --db=${DB} \
     --redis-host=${REDIS_HOST} \
     --redis-port=${REDIS_PORT} \
     --batch-number=${BATCH} \
