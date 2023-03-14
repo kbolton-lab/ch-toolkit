@@ -23,7 +23,7 @@ SPAN='span[hosts=1]'
 COMPUTE_GROUP='compute-bolton'
 QUEUE='general'
 JOB_GROUP='/idas/max-20'
-SCRIPT=${SCRIPT_DIR}/register-variants.sh
+SCRIPT=${SCRIPT_DIR}/ingest-variants.sh
 
 export LSF_DOCKER_VOLUMES="/home/$USER:/home/$USER /storage1/fs1/bolton/Active:/storage1/fs1/bolton/Active /scratch1/fs1/bolton:/scratch1/fs1/bolton"
 
