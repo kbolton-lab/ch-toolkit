@@ -77,12 +77,14 @@ def register_variants(input_vcf, redis_host, redis_port, batch_number, debug):
               help="If exists, delete existing duckdb file and then start from scratch")
 @click.option('--work-dir', '-d', type=click.Path(exists=True), default="/tmp", show_default=True, required=False,
               help="The the working directory to create temporary files (usually the OS temp directory)")
+@click.option('--window-size', '-w', type=click.INT, default=10_000, show_default=True, required=False,
+              help="The variant window size when bulk ingesting variants by executemany")
 @click.option('--debug', '-d', is_flag=True, show_default=True, default=False, required=True,
               help="Print extra debugging output")
-def ingest_variants(database, redis_host, redis_port, batch_number, chromosome, clobber, work_dir, debug):
+def ingest_variants(database, redis_host, redis_port, batch_number, chromosome, clobber, work_dir, window_size, debug):
     """
     Ingest the variants in a batch from redis into duckdb's variant table
     """
     import chip.vdbtools.importer as importer
-    importer.import_variant_batch(database, redis_host, redis_port, batch_number, chromosome, clobber, work_dir, debug)
+    importer.import_variant_batch(database, redis_host, redis_port, batch_number, chromosome, clobber, work_dir, window_size, debug)
     log.logit(f"---> Successfully imported variant batch ({batch_number}) into {database}", color="green")

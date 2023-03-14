@@ -199,9 +199,8 @@ def insert_first_attempt(redis_db, duckdb_connection, batch_number, debug):
 
     return { 'counts': total_variants }
 
-def simple_bulk_insert(redis_db, duckdb_connection, batch_number, chromosome, debug):
+def simple_bulk_insert(redis_db, duckdb_connection, batch_number, chromosome, window_size, debug):
     redis_set_key = f"batch:{batch_number}"
-    window_size = 100_000
     log.logit(f"Inserting variants into duckdb variants table in increments of {window_size}")
     variants = get_variants(redis_db, batch_number, chromosome)
     attributes = ('variant_id', 'chrom', 'pos', 'ref', 'alt', 'batch', 'start', 'stop', 'snp')
@@ -223,7 +222,7 @@ def simple_bulk_insert(redis_db, duckdb_connection, batch_number, chromosome, de
 
     return count
 
-def ingest_variant_batch(duckdb_file, redis_host, redis_port, batch_number, chromosome, clobber, work_dir, debug):
+def ingest_variant_batch(duckdb_file, redis_host, redis_port, batch_number, chromosome, clobber, work_dir, window_size, debug):
     if chromosome:
         log.logit(f"Ingesting variants from redis batch: {batch_number} and chromosome: {chromosome} into {duckdb_file}", color="green")
     else:
@@ -232,7 +231,7 @@ def ingest_variant_batch(duckdb_file, redis_host, redis_port, batch_number, chro
     duckdb_connection = db.duckdb_connect_rw(duckdb_file, clobber)
     setup_variants_table(duckdb_connection)
 #    counts = insert_variants(redis_db, duckdb_connection, batch_number, chromosome, work_dir, debug)
-    counts = simple_bulk_insert(redis_db, duckdb_connection, batch_number, chromosome, debug)
+    counts = simple_bulk_insert(redis_db, duckdb_connection, batch_number, chromosome, window_size, debug)
     create_indexes(duckdb_connection)
     duckdb_connection.close()
     log.logit(f"Finished ingesting variants")
