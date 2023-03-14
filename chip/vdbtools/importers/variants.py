@@ -167,7 +167,7 @@ def insert_variants(redis_db, duckdb_connection, batch_number, chromosome, work_
     return counts
 
 def bulk_insert(duckdb_connection, entries):
-    sql = "insert into variants ( variant_id, chrom, pos, ref, alt, batch_id, start, stop, snp ) values ( ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+    sql = "insert into variants ( variant_id, chrom, pos, ref, alt, batch, start, stop, snp ) values ( ?, ?, ?, ?, ?, ?, ?, ?, ?)"
     log.logit(f"Starting to bulk insert variant batch into duckdb ( {len(entries)} items)")
     duckdb.executemany(sql, entries, duckdb_connection)
     log.logit(f"Finished DuckDB insertion")
