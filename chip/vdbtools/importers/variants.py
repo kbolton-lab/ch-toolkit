@@ -10,14 +10,14 @@ def ensure_variants_table(connection):
     log.logit("Ensuring or creating the variants table")
     sql = """
         CREATE TABLE IF NOT EXISTS variants(
-			variant_id             BIGINT PRIMARY KEY,
-			chrom                  VARCHAR(5),
-			pos                    INTEGER,
-			ref                    VARCHAR(255) NOT NULL,
-			alt                    VARCHAR(255) NOT NULL,
-			snp                    BOOLEAN,
-			qc_pass                BOOLEAN,
-			batch                  INTEGER,
+            variant_id             BIGINT PRIMARY KEY,
+            chrom                  VARCHAR(5),
+            pos                    INTEGER,
+            ref                    VARCHAR(255) NOT NULL,
+            alt                    VARCHAR(255) NOT NULL,
+            snp                    BOOLEAN,
+            qc_pass                BOOLEAN,
+            batch                  INTEGER,
             start                  INTEGER,
             stop                   INTEGER
         )
@@ -250,3 +250,22 @@ def dump_variant_batch(duckdb_file, header, batch_number, chromosome, work_dir, 
     vcf.write_variants_to_vcf(variants, header, batch_number, chromosome)
     duckdb_connection.close()
     log.logit(f"Finished dumping variants into VCF file")
+
+def merge_variant_tables():
+    #  CREATE TABLE IF NOT EXISTS variants(
+    #      variant_id             BIGINT PRIMARY KEY,
+    #      chrom                  VARCHAR(5),
+    #      pos                    INTEGER,
+    #      ref                    VARCHAR(255) NOT NULL,
+    #      alt                    VARCHAR(255) NOT NULL,
+    #      snp                    BOOLEAN,
+    #      qc_pass                BOOLEAN,
+    #      batch                  INTEGER,
+    #      start                  INTEGER,
+    #      stop                   INTEGER
+    #  );
+    # ATTACH 'batch1.chr21.db' as chr21;
+    # insert into variants select * from chr21.variants;
+    # ATTACH 'batch1.chr22.db' as chr22;
+    # insert into variants select * from chr22.variants;
+    # create_indexes(connection)
