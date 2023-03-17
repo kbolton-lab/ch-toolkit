@@ -10,14 +10,14 @@ def ensure_variants_table(connection):
     log.logit("Ensuring or creating the variants table")
     sql = """
         CREATE TABLE IF NOT EXISTS variants(
-			variant_id             BIGINT PRIMARY KEY,
-			chrom                  VARCHAR(5),
-			pos                    INTEGER,
-			ref                    VARCHAR(255) NOT NULL,
-			alt                    VARCHAR(255) NOT NULL,
-			snp                    BOOLEAN,
-			qc_pass                BOOLEAN,
-			batch                  INTEGER,
+            variant_id             BIGINT PRIMARY KEY,
+            chrom                  VARCHAR(5),
+            pos                    INTEGER,
+            ref                    VARCHAR(255) NOT NULL,
+            alt                    VARCHAR(255) NOT NULL,
+            snp                    BOOLEAN,
+            qc_pass                BOOLEAN,
+            batch                  INTEGER,
             start                  INTEGER,
             stop                   INTEGER
         )
