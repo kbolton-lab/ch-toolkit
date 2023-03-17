@@ -34,13 +34,15 @@ def init_db(db_path, sample_name):
               help="Type of VCF file to import")
 @click.option('--input-vcf', 'input_vcf', type=click.Path(exists=True), required=True,
               help="The VCF to be imported into the database")
+@click.option('--clobber', '-f', is_flag=True, show_default=True, default=False, required=True,
+              help="If exists, delete existing duckdb file and then start from scratch")
 @click.argument('variantdb', type=click.Path(exists=True), nargs=1)
-def import_vcf(caller, input_vcf, variantdb):
+def import_vcf(caller, input_vcf, variantdb, clobber):
     """
     variantdb is a path to a sample variant sqlite database.
     """
     import chip.vdbtools.importer as importer
-    importer.import_vcf(variantdb, input_vcf, caller)
+    importer.import_vcf(variantdb, input_vcf, caller, clobber)
     puts(colored.green(f"---> Successfully imported ({input_vcf}) into {variantdb}"))
 
 @cli.command('register-variants', short_help="register the variants in a vcf file into redis")
@@ -88,3 +90,24 @@ def ingest_variants(database, redis_host, redis_port, batch_number, chromosome, 
     import chip.vdbtools.importer as importer
     importer.import_variant_batch(database, redis_host, redis_port, batch_number, chromosome, clobber, work_dir, window_size, debug)
     log.logit(f"---> Successfully imported variant batch ({batch_number}) into {database}", color="green")
+
+@cli.command('dump-variants', short_help="dumps all variants inside duckdb into a VCF file")
+@click.option('--db', '-i', 'database', type=click.Path(), required=True,
+              help="The duckdb database to dump the variants from")
+@click.option('--header', '-h', type=click.Path(), required=True,
+              help="A pre-existing header for VCF")
+@click.option('--batch-number', '-b', type=click.INT, required=True,
+              help="The batch number of this variant set")
+@click.option('--chromosome', '-c', type=click.STRING, default=None,
+              help="The chromosome set of interest")
+@click.option('--work-dir', '-d', type=click.Path(exists=True), default="/tmp", show_default=True, required=False,
+              help="The the working directory to create temporary files (usually the OS temp directory)")
+@click.option('--debug', '-d', is_flag=True, show_default=True, default=False, required=True,
+              help="Print extra debugging output")
+def dump_variants(database, header, batch_number, chromosome, work_dir, debug):
+    """
+    Dumps the variants from duckdb into a VCF file
+    """
+    import chip.vdbtools.dump as dump
+    dump.dump_variant_batch(database, header, batch_number, chromosome, work_dir, debug)
+    log.logit(f"---> Successfully dumped variant batch ({batch_number}) from {database}", color="green")
