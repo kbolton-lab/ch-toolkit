@@ -137,7 +137,7 @@ def csv_dump(redis_db, batch_number, chromosome, work_dir, debug):
 
 def duckdb_load_csv_file(duckdb_connection, temp_csv):
     sql = f"""
-        COPY variants 
+        COPY variants
         FROM read_csv(
             '{temp_csv}',
             delim=',',
@@ -237,3 +237,16 @@ def ingest_variant_batch(duckdb_file, redis_host, redis_port, batch_number, chro
     log.logit(f"Finished ingesting variants")
     log.logit(f"Variants Processed - Total: {counts}", color="green")
     log.logit(f"All Done!", color="green")
+
+def get_variants_from_table(duckdb_connection, batch_number):
+    sql = f"SELECT chrom, pos, ref, alt FROM variants WHERE batch = {batch_number}"
+    return duckdb_connection.sql(sql)
+
+def dump_variant_batch(duckdb_file, header, batch_number, chromosome, work_dir, debug):
+    import chip.vdbtools.importers.vcf as vcf
+    log.logit(f"Dumping variants from batch: {batch_number} and chromosome: {chromosome} into a VCF file", color="green")
+    duckdb_connection = db.duckdb_connect(duckdb_file)
+    variants = get_variants_from_table(duckdb_connection, batch_number)
+    vcf.write_variants_to_vcf(variants, header, batch_number, chromosome)
+    duckdb_connection.close()
+    log.logit(f"Finished dumping variants into VCF file")
