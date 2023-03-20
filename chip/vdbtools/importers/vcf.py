@@ -1,6 +1,9 @@
 import vcfpy
 import collections
 import pysam
+import os
+import importlib.resources
+from clint.textui import puts
 
 class Vcf:
     def __init__(self, vcf_path):
@@ -10,8 +13,13 @@ class Vcf:
     def reset_reader(self):
         self.reader = vcfpy.Reader.from_path(self.vcf_path)
 
+def load_simple_header():
+    puts("Loading default VCF header...")
+    source = importlib.resources.files('chip.resources.vcf').joinpath('dummy.header')
+    return(source)
+
 def write_variants_to_vcf(duckdb_variants, header, batch_number, chromosome):
-    reader = vcfpy.Reader.from_path(header)
+    reader = vcfpy.Reader.from_path(load_simple_header())
     header = reader.header
     #header = vcfpy.Header(samples = str(batch_number))
     #meta_line = vcfpy.MetaHeaderLine('fileformat', '', {'META': 'VCFv4.3'})
@@ -41,4 +49,5 @@ def write_variants_to_vcf(duckdb_variants, header, batch_number, chromosome):
         writer.write_record(record)
     writer.close()
     pysam.tabix_compress(chromosome + '.vcf', chromosome + '.vcf.gz', force = True)
+    os.unlink(chromosome + '.vcf')
     pysam.tabix_index(chromosome + '.vcf.gz', preset="vcf", force = True)

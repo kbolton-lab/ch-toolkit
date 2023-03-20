@@ -19,7 +19,9 @@ def ensure_variants_table(connection):
             qc_pass                BOOLEAN,
             batch                  INTEGER,
             start                  INTEGER,
-            stop                   INTEGER
+            stop                   INTEGER,
+            PoN_RefDepth           INTEGER,
+            PoN_AltDepth           INTEGER
         )
     """
     connection.execute(sql)
@@ -251,7 +253,7 @@ def dump_variant_batch(duckdb_file, header, batch_number, chromosome, work_dir, 
     duckdb_connection.close()
     log.logit(f"Finished dumping variants into VCF file")
 
-def merge_variant_tables():
+#def merge_variant_tables():
     #  CREATE TABLE IF NOT EXISTS variants(
     #      variant_id             BIGINT PRIMARY KEY,
     #      chrom                  VARCHAR(5),

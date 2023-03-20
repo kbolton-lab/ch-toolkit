@@ -8,11 +8,35 @@ import chip.utils.database as db
 def ensure_mutect_tbl(connection):
     log.logit("Ensuring or creating the mutect table")
     sql = '''
+        CREATE TYPE mutect_filter_type AS ENUM (
+            'PASS',
+            'FAIL',
+            'base_qual',
+            'clustered_events',
+            'contamination',
+            'duplicate',
+            'fragment',
+            'germline',
+            'haplotype',
+            'low_allele_frac',
+            'map_qual',
+            'multiallelic',
+            'n_ratio',
+            'normal_artifact',
+            'orientation',
+            'panel_of_normals',
+            'position',
+            'possible_numt',
+            'slippage',
+            'strand_bias',
+            'strict_strand',
+            'weak_evidence'
+        );
         CREATE TABLE IF NOT EXISTS mutect(
             sample_id                           integer NOT NULL,
             variant_id                          integer NOT NULL,
             version                             varchar(50),
-            mutect_filter_type_id               varchar[],
+            mutect_filter                       mutect_filter_type[],
             info_as_filterstatus                varchar[],       /* e.g. AS_FilterStatus=strand_bias|strand_bias */
             info_as_sb_table                    varchar(20),     /* e.g. AS_SB_TABLE=5379,6627|1,27|1,174 */
             info_dp                             integer,
@@ -53,12 +77,33 @@ def ensure_mutect_tbl(connection):
 
 def ensure_vardict_tbl(connection):
     log.logit("Ensuring or creating the vardict table")
+
     sql = '''
+        CREATE TYPE vardict_filter_type AS ENUM (
+            'PASS',
+            'q22.5',
+            'Q10',
+            'p8',
+            'SN1.5',
+            'Bias',
+            'pSTD',
+            'd3',
+            'v2',
+            'min_af',
+            'MSI12',
+            'NM5.25',
+            'InGap',
+            'InIns',
+            'Cluster0bp',
+            'LongMSI',
+            'AMPBIAS',
+            'BCBIO'
+        );
         CREATE TABLE IF NOT EXISTS vardict(
             sample_id               integer NOT NULL,
             variant_id              integer NOT NULL,
             version                 varchar(10),
-            vardict_filter_type_id  varchar[],
+            vardict_filter          vardict_filter_type[],
             info_type               varchar(5),
             info_dp                 integer,
             info_vd                 integer,
@@ -143,7 +188,7 @@ def setup_vardict_tbl(connection):
     drop_indexes_vardict(connection)
     return connection
 
-def insert_mutect_caller(db_path, input_vcf, clobber):
+def insert_mutect_caller(db_path, input_vcf, chromosome, variant_duckdb, clobber):
     con = db.duckdb_connect_rw(db_path, clobber)
     setup_mutect_tbl(con)
     reader = vcfpy.Reader.from_path(input_vcf)
@@ -151,11 +196,16 @@ def insert_mutect_caller(db_path, input_vcf, clobber):
     version="2.2"
 
     sample_name = os.path.basename(input_vcf).split('.')[1]
-    for record in reader:
+    variants = reader.fetch(chromosome) if chromosome != None else reader
+    variant_duckdb_connection = db.duckdb_connect(variant_duckdb)
+    count = 0
+    window_size = 10000
+    for record in variants:
         # Get the Variant_ID
-        variant_id = con.execute(f"SELECT variant_id FROM variants WHERE chrom = '{record.CHROM}' AND pos = {record.POS} AND ref = '{record.REF}' AND alt = '{record.ALT[0].value}';").fetchone()[0]
+        variant_id = variant_duckdb_connection.execute(f"SELECT variant_id FROM variants WHERE chrom = '{record.CHROM}' AND pos = {record.POS} AND ref = '{record.REF}' AND alt = '{record.ALT[0].value}';").fetchone()[0]
         # Get the Sample_ID
-        sample_id = con.execute(f"SELECT sample_id FROM samples WHERE sample_name = '{sample_name}';").fetchone()[0]
+        #sample_id = con.execute(f"SELECT sample_id FROM samples WHERE sample_name = '{sample_name}';").fetchone()[0]
+        sample_id = 1
 
         mutect_filter_type = record.FILTER
         info_as_filterstatus = ['Multiallelic'] if record.INFO.get('AS_FilterStatus') is None else record.INFO.get('AS_FilterStatus')
@@ -185,29 +235,38 @@ def insert_mutect_caller(db_path, input_vcf, clobber):
         (format_ref_f2r1, format_alt_f2r1) = record.calls[0].data.get('F2R1')
         format_gt = record.calls[0].data.get('GT')
         (format_ref_fwd, format_ref_rev, format_alt_fwd, format_alt_rev) = record.calls[0].data.get('SB')
+        #TODO: fisher_p_value = fisher_test_function(variant_id_pon_refdepth, variant_id_pon_altdepth, format_ref_fwd + format_ref_rev, format_alt_fwd + format_alt_rev)
         fisher_p_value = 0.05
-
-        print(f"sample_id={sample_id} | variant_id={variant_id} | version={version} | mutect_filter_type={mutect_filter_type} \nINFO: info_as_filterstatus={info_as_filterstatus} | info_as_sb_table={info_as_sb_table} | info_dp={info_dp} | info_ecnt={info_ecnt} | info_mbq_ref={info_mbq_ref} | info_mbq_alt={info_mbq_alt} | info_mfrl_ref={info_mfrl_ref} | info_mfrl_alt={info_mfrl_alt} | info_mmq_ref={info_mmq_ref} | info_mmq_alt={info_mmq_alt} | info_mpos={info_mpos} | info_popaf={info_popaf} | info_roq={info_roq} | info_rpa_ref={info_rpa_ref} | info_rpa_alt={info_rpa_alt} | info_ru={info_ru} | info_str={info_str} | info_strq={info_strq} | info_tlod={info_tlod} \nFORMAT: format_dp={format_dp} | format_af={format_af} | format_ref_count={format_ref_count} | format_alt_count={format_alt_count} | format_ref_f1r2={format_ref_f1r2} | format_alt_f1r2={format_alt_f1r2} | format_ref_f2r1={format_ref_f2r1} | format_alt_f2r1={format_alt_f2r1} | format_gt={format_gt} | format_ref_fwd={format_ref_fwd} | format_ref_rev={format_ref_rev} | format_alt_fwd={format_alt_fwd} | format_alt_rev={format_alt_rev} | fisher_p_value={fisher_p_value}")
-        sql = f"INSERT INTO mutect (sample_id, variant_id, version, mutect_filter_type_id, info_as_filterstatus, info_as_sb_table, info_dp, info_ecnt, info_mbq_ref, info_mbq_alt, info_mfrl_ref, info_mfrl_alt, info_mmq_ref, info_mmq_alt, info_mpos, info_popaf, info_roq, info_rpa_ref, info_rpa_alt, info_ru, info_str, info_strq, info_tlod, format_gt, format_af, format_dp, format_ref_count, format_alt_count, format_ref_f1r2, format_alt_f1r2, format_ref_f2r1, format_alt_f2r1, format_ref_fwd, format_ref_rev, format_alt_fwd, format_alt_rev, fisher_p_value) VALUES ({sample_id}, {variant_id}, '{version}', {mutect_filter_type}, {info_as_filterstatus}, '{info_as_sb_table}', {info_dp}, {info_ecnt}, {info_mbq_ref}, {info_mbq_alt}, {info_mfrl_ref}, {info_mfrl_alt}, {info_mmq_ref}, {info_mmq_alt}, {info_mpos}, {info_popaf}, {info_roq}, {info_rpa_ref}, {info_rpa_alt}, '{info_ru}', {info_str}, {info_strq}, {info_tlod}, {format_gt}, {format_af}, {format_dp}, {format_ref_count}, {format_alt_count}, {format_ref_f1r2}, {format_alt_f1r2}, {format_ref_f2r1}, {format_alt_f2r1}, {format_ref_fwd}, {format_ref_rev}, {format_alt_fwd}, {format_alt_rev}, {fisher_p_value})"
-        print(sql + "\n")
+        if count % window_size == 0:
+            log.logit(f"sample_id={sample_id} | variant_id={variant_id} | version={version} | mutect_filter_type={mutect_filter_type} \nINFO: info_as_filterstatus={info_as_filterstatus} | info_as_sb_table={info_as_sb_table} | info_dp={info_dp} | info_ecnt={info_ecnt} | info_mbq_ref={info_mbq_ref} | info_mbq_alt={info_mbq_alt} | info_mfrl_ref={info_mfrl_ref} | info_mfrl_alt={info_mfrl_alt} | info_mmq_ref={info_mmq_ref} | info_mmq_alt={info_mmq_alt} | info_mpos={info_mpos} | info_popaf={info_popaf} | info_roq={info_roq} | info_rpa_ref={info_rpa_ref} | info_rpa_alt={info_rpa_alt} | info_ru={info_ru} | info_str={info_str} | info_strq={info_strq} | info_tlod={info_tlod} \nFORMAT: format_dp={format_dp} | format_af={format_af} | format_ref_count={format_ref_count} | format_alt_count={format_alt_count} | format_ref_f1r2={format_ref_f1r2} | format_alt_f1r2={format_alt_f1r2} | format_ref_f2r1={format_ref_f2r1} | format_alt_f2r1={format_alt_f2r1} | format_gt={format_gt} | format_ref_fwd={format_ref_fwd} | format_ref_rev={format_ref_rev} | format_alt_fwd={format_alt_fwd} | format_alt_rev={format_alt_rev} | fisher_p_value={fisher_p_value}")
+        sql = f"INSERT INTO mutect (sample_id, variant_id, version, mutect_filter, info_as_filterstatus, info_as_sb_table, info_dp, info_ecnt, info_mbq_ref, info_mbq_alt, info_mfrl_ref, info_mfrl_alt, info_mmq_ref, info_mmq_alt, info_mpos, info_popaf, info_roq, info_rpa_ref, info_rpa_alt, info_ru, info_str, info_strq, info_tlod, format_gt, format_af, format_dp, format_ref_count, format_alt_count, format_ref_f1r2, format_alt_f1r2, format_ref_f2r1, format_alt_f2r1, format_ref_fwd, format_ref_rev, format_alt_fwd, format_alt_rev, fisher_p_value) VALUES ({sample_id}, {variant_id}, '{version}', {mutect_filter_type}, {info_as_filterstatus}, '{info_as_sb_table}', {info_dp}, {info_ecnt}, {info_mbq_ref}, {info_mbq_alt}, {info_mfrl_ref}, {info_mfrl_alt}, {info_mmq_ref}, {info_mmq_alt}, {info_mpos}, {info_popaf}, {info_roq}, {info_rpa_ref}, {info_rpa_alt}, '{info_ru}', {info_str}, {info_strq}, {info_tlod}, {format_gt}, {format_af}, {format_dp}, {format_ref_count}, {format_alt_count}, {format_ref_f1r2}, {format_alt_f1r2}, {format_ref_f2r1}, {format_alt_f2r1}, {format_ref_fwd}, {format_ref_rev}, {format_alt_fwd}, {format_alt_rev}, {fisher_p_value})"
+        #print(sql + "\n")
         con.execute(sql)
+        count += 1
+        if count % window_size == 0: log.logit(f"Inserted {count} variants")
+    variant_duckdb_connection.close()
     create_indexes_mutect(con)
     con.close()
     log.logit(f"Finished inserting mutect variants")
     log.logit(f"All Done!", color="green")
 
-def insert_vardict_caller(db_path, input_vcf, clobber):
+def insert_vardict_caller(db_path, input_vcf, chromosome, variant_duckdb, clobber):
     con = db.duckdb_connect_rw(db_path, clobber)
     setup_vardict_tbl(con)
     reader = vcfpy.Reader.from_path(input_vcf)
     version="v1.8.2"
 
     sample_name = os.path.basename(input_vcf).split('.')[1]
-    for record in reader:
+    variants = reader.fetch(chromosome) if chromosome != None else reader
+    variant_duckdb_connection = db.duckdb_connect(variant_duckdb)
+    count = 0
+    window_size = 10000
+    for record in variants:
         # Get the Variant_ID
-        variant_id = con.execute(f"SELECT variant_id FROM variants WHERE chrom = '{record.CHROM}' AND pos = {record.POS} AND ref = '{record.REF}' AND alt = '{record.ALT[0].value}';").fetchone()[0]
+        variant_id = variant_duckdb_connection.execute(f"SELECT variant_id FROM variants WHERE chrom = '{record.CHROM}' AND pos = {record.POS} AND ref = '{record.REF}' AND alt = '{record.ALT[0].value}';").fetchone()[0]
         # Get the Sample_ID
-        sample_id = con.execute(f"SELECT sample_id FROM samples WHERE sample_name = '{sample_name}';").fetchone()[0]
+        #sample_id = con.execute(f"SELECT sample_id FROM samples WHERE sample_name = '{sample_name}';").fetchone()[0]
+        sample_id = 1
 
         filter_type = record.FILTER
         info_type = record.INFO.get('TYPE')
@@ -248,10 +307,14 @@ def insert_vardict_caller(db_path, input_vcf, clobber):
         format_vd = record.calls[0].data.get('VD', 0)
         fisher_p_value = 0.05
 
-        print(f"sample_id={sample_id} | variant_id={variant_id} | version={version} | vardict_filter_type={filter_type} \nINFO: info_type={info_type} | info_vd={info_vd} | info_af={info_af} | info_bias={info_bias} | info_refbias={info_refbias} | info_varbias={info_varbias} | info_pmean={info_pmean} | info_pstd={info_pstd} | info_qual={info_qual} | info_qstd={info_qstd} | info_sbf={info_sbf} | info_oddratio={info_oddratio} | info_mq={info_mq} | info_sn={info_sn} | info_hiaf={info_hiaf} | info_adjaf={info_adjaf} | info_shift3={info_shift3} | info_msi={info_msi} | info_msilen={info_msilen} | info_nm={info_nm} | info_lseq={info_lseq} | info_rseq={info_rseq} | info_hicnt={info_hicnt} | info_hicov={info_hicov} | info_splitread={info_splitread} | info_spanpair={info_spanpair} | info_duprate={info_duprate} \nFORMAT: format_dp={format_dp} | format_af={format_af} | format_ref_count={format_ref_count} | format_alt_count={format_alt_count} | format_vd={format_vd} | format_gt={format_gt} | format_ref_fwd={format_ref_fwd} | format_ref_rev={format_ref_rev} | format_alt_fwd={format_alt_fwd} | format_alt_rev={format_alt_rev} | fisher_p_value={fisher_p_value}")
-        sql = f"INSERT INTO vardict (sample_id, variant_id, version, vardict_filter_type_id, info_type, info_vd, info_af, info_bias, info_refbias, info_varbias, info_pmean, info_pstd, info_qual, info_qstd, info_sbf, info_oddratio, info_mq, info_sn, info_hiaf, info_adjaf, info_shift3, info_msi, info_msilen, info_nm, info_lseq, info_rseq, info_hicnt, info_hicov, info_splitread, info_spanpair, info_duprate, format_gt, format_af, format_dp, format_ref_count, format_alt_count, format_vd, format_ref_fwd, format_ref_rev, format_alt_fwd, format_alt_rev, fisher_p_value) VALUES ({sample_id}, {variant_id}, '{version}', {filter_type}, '{info_type}', {info_vd}, {info_af}, '{info_bias}', '{info_refbias}', '{info_varbias}', {info_pmean}, {info_pstd}, {info_qual}, {info_qstd}, {info_sbf}, {info_oddratio}, {info_mq}, {info_sn}, {info_hiaf}, {info_adjaf}, {info_shift3}, {info_msi}, {info_msilen}, {info_nm}, '{info_lseq}', '{info_rseq}', {info_hicnt}, {info_hicov}, {info_splitread}, {info_spanpair}, {info_duprate}, {format_gt}, {format_af}, {format_dp}, {format_ref_count}, {format_alt_count}, {format_vd}, {format_ref_fwd}, {format_ref_rev}, {format_alt_fwd}, {format_alt_rev}, {fisher_p_value})"
-        print(sql + "\n")
+        if count % window_size == 0:
+            log.logit(f"sample_id={sample_id} | variant_id={variant_id} | version={version} | vardict_filter_type={filter_type} \nINFO: info_type={info_type} | info_vd={info_vd} | info_af={info_af} | info_bias={info_bias} | info_refbias={info_refbias} | info_varbias={info_varbias} | info_pmean={info_pmean} | info_pstd={info_pstd} | info_qual={info_qual} | info_qstd={info_qstd} | info_sbf={info_sbf} | info_oddratio={info_oddratio} | info_mq={info_mq} | info_sn={info_sn} | info_hiaf={info_hiaf} | info_adjaf={info_adjaf} | info_shift3={info_shift3} | info_msi={info_msi} | info_msilen={info_msilen} | info_nm={info_nm} | info_lseq={info_lseq} | info_rseq={info_rseq} | info_hicnt={info_hicnt} | info_hicov={info_hicov} | info_splitread={info_splitread} | info_spanpair={info_spanpair} | info_duprate={info_duprate} \nFORMAT: format_dp={format_dp} | format_af={format_af} | format_ref_count={format_ref_count} | format_alt_count={format_alt_count} | format_vd={format_vd} | format_gt={format_gt} | format_ref_fwd={format_ref_fwd} | format_ref_rev={format_ref_rev} | format_alt_fwd={format_alt_fwd} | format_alt_rev={format_alt_rev} | fisher_p_value={fisher_p_value}")
+        sql = f"INSERT INTO vardict (sample_id, variant_id, version, vardict_filter, info_type, info_vd, info_af, info_bias, info_refbias, info_varbias, info_pmean, info_pstd, info_qual, info_qstd, info_sbf, info_oddratio, info_mq, info_sn, info_hiaf, info_adjaf, info_shift3, info_msi, info_msilen, info_nm, info_lseq, info_rseq, info_hicnt, info_hicov, info_splitread, info_spanpair, info_duprate, format_gt, format_af, format_dp, format_ref_count, format_alt_count, format_vd, format_ref_fwd, format_ref_rev, format_alt_fwd, format_alt_rev, fisher_p_value) VALUES ({sample_id}, {variant_id}, '{version}', {filter_type}, '{info_type}', {info_vd}, {info_af}, '{info_bias}', '{info_refbias}', '{info_varbias}', {info_pmean}, {info_pstd}, {info_qual}, {info_qstd}, {info_sbf}, {info_oddratio}, {info_mq}, {info_sn}, {info_hiaf}, {info_adjaf}, {info_shift3}, {info_msi}, {info_msilen}, {info_nm}, '{info_lseq}', '{info_rseq}', {info_hicnt}, {info_hicov}, {info_splitread}, {info_spanpair}, {info_duprate}, {format_gt}, {format_af}, {format_dp}, {format_ref_count}, {format_alt_count}, {format_vd}, {format_ref_fwd}, {format_ref_rev}, {format_alt_fwd}, {format_alt_rev}, {fisher_p_value})"
+        #print(sql + "\n")
         con.execute(sql)
+        count += 1
+        if count % window_size == 0: log.logit(f"Inserted {count} variants")
+    variant_duckdb_connection.close()
     create_indexes_vardict(con)
     con.close()
     log.logit(f"Finished inserting vardict variants")

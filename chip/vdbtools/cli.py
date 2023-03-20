@@ -36,13 +36,18 @@ def init_db(db_path, sample_name):
               help="The VCF to be imported into the database")
 @click.option('--clobber', '-f', is_flag=True, show_default=True, default=False, required=True,
               help="If exists, delete existing duckdb file and then start from scratch")
-@click.argument('variantdb', type=click.Path(exists=True), nargs=1)
-def import_vcf(caller, input_vcf, variantdb, clobber):
+@click.option('--db', '-i', 'database', type=click.Path(), required=True,
+              help="The duckdb database to import the caller data")
+@click.option('--vdb', 'variant_duckdb', type=click.Path(), required=True,
+              help="The duckdb database to fetch variant ID from")
+@click.option('--chromosome', '-c', type=click.STRING, default=None,
+              help="The chromosome set of interest")
+def import_vcf(caller, input_vcf, database, chromosome, variant_duckdb, clobber):
     """
     variantdb is a path to a sample variant sqlite database.
     """
     import chip.vdbtools.importer as importer
-    importer.import_vcf(variantdb, input_vcf, caller, clobber)
+    importer.import_vcf(database, input_vcf, caller, chromosome, variant_duckdb, clobber)
     puts(colored.green(f"---> Successfully imported ({input_vcf}) into {variantdb}"))
 
 @cli.command('register-variants', short_help="register the variants in a vcf file into redis")
