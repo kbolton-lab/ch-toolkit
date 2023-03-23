@@ -1,4 +1,5 @@
 import os, gzip, csv
+import vcfpy
 
 import chip.utils.logger as log
 import chip.utils.database as db
@@ -174,6 +175,12 @@ def bulk_insert(duckdb_connection, entries):
     duckdb.executemany(sql, entries, duckdb_connection)
     log.logit(f"Finished DuckDB insertion")
 
+def bulk_update_pileup(duckdb_connection, entries):
+    sql = f"UPDATE variants SET PoN_RefDepth = ?, PoN_AltDepth = ? WHERE chrom = ? AND pos = ? AND ref = ? AND alt = ?"
+    log.logit(f"Starting to bulk update variant batch into duckdb ( {len(entries)} items)")
+    duckdb.executemany(sql, entries, duckdb_connection)
+    log.logit(f"Finished Updating the Variants in DuckDB")
+
 def insert_first_attempt(redis_db, duckdb_connection, batch_number, debug):
     redis_set_key = f"batch:{batch_number}"
     total_variants = int(redis_db.scard(redis_set_key))
@@ -221,7 +228,6 @@ def simple_bulk_insert(redis_db, duckdb_connection, batch_number, chromosome, wi
 
         if len(window) > 0:
             bulk_insert(duckdb_connection, window)
-
     return count
 
 def ingest_variant_batch(duckdb_file, redis_host, redis_port, batch_number, chromosome, clobber, work_dir, window_size, debug):
@@ -252,6 +258,40 @@ def dump_variant_batch(duckdb_file, header, batch_number, chromosome, work_dir, 
     vcf.write_variants_to_vcf(variants, header, batch_number, chromosome)
     duckdb_connection.close()
     log.logit(f"Finished dumping variants into VCF file")
+
+def annotate_variants_with_pon_pileup(connection, pon_pileup, chromosome, window_size, debug):
+    log.logit(f"Importing pileup information in increments of {window_size}")
+    reader = vcfpy.Reader.from_path(pon_pileup)
+    variants = reader.fetch(chromosome) if chromosome != None else reader
+    attributes = ('PoN_RefDepth', 'PoN_AltDepth')
+    window = []
+    count = 0
+    with indent(4, quote=' >'):
+        for (i, variant) in enumerate(variants):
+            row = (variant.INFO.get('PON_RefDepth')[0], variant.INFO.get('PON_AltDepth')[0], variant.CHROM, variant.POS, variant.REF, variant.ALT[0].value)
+            if debug: log.logit(f"{i} -- {row}")
+            window.append( row )
+            if i % window_size == 0 and i != 0:
+                bulk_update_pileup(connection, window)
+                log.logit(f"# Variants Processed: {i}")
+                window = []
+            count += 1
+        if len(window) > 0:
+            bulk_update_pileup(connection, window)
+    return count
+
+def import_pon_pileup(variant_duckdb, pon_pileup, batch_number, chromosome, window_size, debug):
+    if chromosome:
+        log.logit(f"Adding pileup from batch: {batch_number} and chromosome: {chromosome} into {variant_duckdb}", color="green")
+    else:
+        log.logit(f"Adding pileup from batch: {batch_number} into {variant_duckdb}", color="green")
+    variant_duckdb_connection = db.duckdb_connect_rw(variant_duckdb, False)
+    counts = annotate_variants_with_pon_pileup(variant_duckdb_connection, pon_pileup, chromosome, window_size, debug)
+    variant_duckdb_connection.close()
+    log.logit(f"Finished importing PoN pileup information")
+    log.logit(f"Variants Processed - Total: {counts}", color="green")
+    log.logit(f"All Done!", color="green")
+
 
 #def merge_variant_tables():
     #  CREATE TABLE IF NOT EXISTS variants(

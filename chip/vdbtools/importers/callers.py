@@ -188,7 +188,10 @@ def setup_vardict_tbl(connection):
     drop_indexes_vardict(connection)
     return connection
 
-def insert_mutect_caller(db_path, input_vcf, chromosome, variant_duckdb, clobber):
+def fisher_test(connection, variant_id, sample_id):
+    return 0.05
+
+def insert_mutect_caller(db_path, input_vcf, chromosome, variant_duckdb, sample_duckdb, clobber):
     con = db.duckdb_connect_rw(db_path, clobber)
     setup_mutect_tbl(con)
     reader = vcfpy.Reader.from_path(input_vcf)
@@ -198,13 +201,14 @@ def insert_mutect_caller(db_path, input_vcf, chromosome, variant_duckdb, clobber
     sample_name = os.path.basename(input_vcf).split('.')[1]
     variants = reader.fetch(chromosome) if chromosome != None else reader
     variant_duckdb_connection = db.duckdb_connect(variant_duckdb)
+    #sample_duckdb_connection = db.duckdb_connect(sample_duckdb)
     count = 0
     window_size = 10000
     for record in variants:
         # Get the Variant_ID
         variant_id = variant_duckdb_connection.execute(f"SELECT variant_id FROM variants WHERE chrom = '{record.CHROM}' AND pos = {record.POS} AND ref = '{record.REF}' AND alt = '{record.ALT[0].value}';").fetchone()[0]
         # Get the Sample_ID
-        #sample_id = con.execute(f"SELECT sample_id FROM samples WHERE sample_name = '{sample_name}';").fetchone()[0]
+        #sample_id = sample_duckdb_connection.execute(f"SELECT sample_id FROM samples WHERE sample_name = '{sample_name}';").fetchone()[0]
         sample_id = 1
 
         mutect_filter_type = record.FILTER
@@ -250,7 +254,7 @@ def insert_mutect_caller(db_path, input_vcf, chromosome, variant_duckdb, clobber
     log.logit(f"Finished inserting mutect variants")
     log.logit(f"All Done!", color="green")
 
-def insert_vardict_caller(db_path, input_vcf, chromosome, variant_duckdb, clobber):
+def insert_vardict_caller(db_path, input_vcf, chromosome, variant_duckdb, sample_duckdb, clobber):
     con = db.duckdb_connect_rw(db_path, clobber)
     setup_vardict_tbl(con)
     reader = vcfpy.Reader.from_path(input_vcf)
@@ -259,13 +263,14 @@ def insert_vardict_caller(db_path, input_vcf, chromosome, variant_duckdb, clobbe
     sample_name = os.path.basename(input_vcf).split('.')[1]
     variants = reader.fetch(chromosome) if chromosome != None else reader
     variant_duckdb_connection = db.duckdb_connect(variant_duckdb)
+    #sample_duckdb_connection = db.duckdb_connect(sample_duckdb)
     count = 0
     window_size = 10000
     for record in variants:
         # Get the Variant_ID
         variant_id = variant_duckdb_connection.execute(f"SELECT variant_id FROM variants WHERE chrom = '{record.CHROM}' AND pos = {record.POS} AND ref = '{record.REF}' AND alt = '{record.ALT[0].value}';").fetchone()[0]
         # Get the Sample_ID
-        #sample_id = con.execute(f"SELECT sample_id FROM samples WHERE sample_name = '{sample_name}';").fetchone()[0]
+        #sample_id = sample_duckdb_connection.execute(f"SELECT sample_id FROM samples WHERE sample_name = '{sample_name}';").fetchone()[0]
         sample_id = 1
 
         filter_type = record.FILTER

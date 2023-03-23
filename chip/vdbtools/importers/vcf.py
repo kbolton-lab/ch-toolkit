@@ -13,13 +13,18 @@ class Vcf:
     def reset_reader(self):
         self.reader = vcfpy.Reader.from_path(self.vcf_path)
 
-def load_simple_header():
-    puts("Loading default VCF header...")
-    source = importlib.resources.files('chip.resources.vcf').joinpath('dummy.header')
-    return(source)
+def load_simple_header(header_type):
+    # TODO
+    if header_type == "complex":
+        puts("Loading complex VCF header...")
+        retur(source)
+    else:
+        puts("Loading default VCF header...")
+        source = importlib.resources.files('chip.resources.vcf').joinpath('dummy.header')
+        return(source)
 
-def write_variants_to_vcf(duckdb_variants, header, batch_number, chromosome):
-    reader = vcfpy.Reader.from_path(load_simple_header())
+def write_variants_to_vcf(duckdb_variants, header_type, batch_number, chromosome):
+    reader = vcfpy.Reader.from_path(load_simple_header(header_type))
     header = reader.header
     #header = vcfpy.Header(samples = str(batch_number))
     #meta_line = vcfpy.MetaHeaderLine('fileformat', '', {'META': 'VCFv4.3'})

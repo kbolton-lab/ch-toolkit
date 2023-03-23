@@ -40,15 +40,17 @@ def init_db(db_path, sample_name):
               help="The duckdb database to import the caller data")
 @click.option('--vdb', 'variant_duckdb', type=click.Path(), required=True,
               help="The duckdb database to fetch variant ID from")
+@click.option('--sdb', 'sample_duckdb', type=click.Path(), required=True,
+              help="The duckdb database to fetch sample ID from")
 @click.option('--chromosome', '-c', type=click.STRING, default=None,
               help="The chromosome set of interest")
-def import_vcf(caller, input_vcf, database, chromosome, variant_duckdb, clobber):
+def import_vcf(caller, input_vcf, database, chromosome, variant_duckdb, sample_duckdb, clobber):
     """
     variantdb is a path to a sample variant sqlite database.
     """
     import chip.vdbtools.importer as importer
-    importer.import_vcf(database, input_vcf, caller, chromosome, variant_duckdb, clobber)
-    puts(colored.green(f"---> Successfully imported ({input_vcf}) into {variantdb}"))
+    importer.import_vcf(database, input_vcf, caller, chromosome, variant_duckdb, sample_duckdb, clobber)
+    puts(colored.green(f"---> Successfully imported ({input_vcf}) into {database}"))
 
 @cli.command('register-variants', short_help="register the variants in a vcf file into redis")
 @click.option('--input-vcf', '-i', 'input_vcf', type=click.Path(exists=True), required=True,
@@ -97,10 +99,10 @@ def ingest_variants(database, redis_host, redis_port, batch_number, chromosome, 
     log.logit(f"---> Successfully imported variant batch ({batch_number}) into {database}", color="green")
 
 @cli.command('dump-variants', short_help="dumps all variants inside duckdb into a VCF file")
-@click.option('--db', '-i', 'database', type=click.Path(), required=True,
+@click.option('--db', '-i', 'database', type=click.Path(exists=True), required=True,
               help="The duckdb database to dump the variants from")
-@click.option('--header', '-h', type=click.Path(), required=True,
-              help="A pre-existing header for VCF")
+@click.option('--header-type', '-h', type=click.STRING, default=None, required=True,
+              help="A pre-existing header type e.g. simple, mutect, vardict, complex, etc.")
 @click.option('--batch-number', '-b', type=click.INT, required=True,
               help="The batch number of this variant set")
 @click.option('--chromosome', '-c', type=click.STRING, default=None,
@@ -109,10 +111,31 @@ def ingest_variants(database, redis_host, redis_port, batch_number, chromosome, 
               help="The the working directory to create temporary files (usually the OS temp directory)")
 @click.option('--debug', '-d', is_flag=True, show_default=True, default=False, required=True,
               help="Print extra debugging output")
-def dump_variants(database, header, batch_number, chromosome, work_dir, debug):
+def dump_variants(database, header_type, batch_number, chromosome, work_dir, debug):
     """
     Dumps the variants from duckdb into a VCF file
     """
     import chip.vdbtools.dump as dump
-    dump.dump_variant_batch(database, header, batch_number, chromosome, work_dir, debug)
+    dump.dump_variant_batch(database, header_type, batch_number, chromosome, work_dir, debug)
     log.logit(f"---> Successfully dumped variant batch ({batch_number}) from {database}", color="green")
+
+@cli.command('import-pon-pileup', short_help="updates variants inside duckdb with PoN pileup information")
+@click.option('--vdb', 'variant_duckdb', type=click.Path(exists=True), required=True,
+              help="The duckdb database to fetch variant ID from")
+@click.option('--pon-pileup', '-p', 'pon_pileup', type=click.Path(exists=True), required=True,
+              help="The pon pileup VCF to be imported into the variant database")
+@click.option('--batch-number', '-b', type=click.INT, required=True,
+              help="The batch number of this variant set")
+@click.option('--chromosome', '-c', type=click.STRING, default=None,
+              help="The chromosome set of interest")
+@click.option('--window-size', '-w', type=click.INT, default=10_000, show_default=True, required=False,
+              help="The variant window size when bulk updating variants by executemany")
+@click.option('--debug', '-d', is_flag=True, show_default=True, default=False, required=True,
+              help="Print extra debugging output")
+def import_pon_pileup(variant_duckdb, pon_pileup, batch_number, chromosome, window_size, debug):
+    """
+    Dumps the panel of normal pileup information from into variants duckdb
+    """
+    import chip.vdbtools.importer as importer
+    importer.import_pon_pileup(variant_duckdb, pon_pileup, batch_number, chromosome, window_size, debug)
+    log.logit(f"---> Successfully imported PoN Pileup from batch ({batch_number}) into {variant_duckdb}", color="green")
