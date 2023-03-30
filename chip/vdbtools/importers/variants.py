@@ -3,6 +3,7 @@ import vcfpy
 
 import chip.utils.logger as log
 import chip.utils.database as db
+import chip.utils.fisher_exact_test as fisher_test
 
 import duckdb
 from clint.textui import indent, puts_err, puts
@@ -53,9 +54,9 @@ def create_indexes(connection):
         """
         connection.execute(sql)
 
-        log.logit("Generating the batch_idx")
+        log.logit("Generating the batch_id_idx")
         sql = """
-            CREATE INDEX batch_idx
+            CREATE INDEX batch_id_idx
             ON variants ( batch )
         """
         connection.execute(sql)

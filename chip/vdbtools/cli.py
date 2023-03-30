@@ -27,6 +27,21 @@ def init_db(db_path, sample_name):
     init.create_db(db_path, sample_name)
     puts(colored.green(f"---> Successfully created variant database ({sample_name}): {db_path}"))
 
+@cli.command('import-samples', short_help="takes either a list of samples and loads into samples database")
+@click.option('--samples', '-s', type=click.Path(exists=True), required=True, help="A file with the samples")
+@click.option('--sdb', 'sample_duckdb', type=click.Path(), required=True, help="The duckdb database to store sample information")
+@click.option('--debug', '-d', is_flag=True, show_default=True, default=False, required=True,
+              help="Print extra debugging output")
+@click.option('--clobber', '-f', is_flag=True, show_default=True, default=False, required=True,
+              help="If exists, delete existing duckdb file and then start from scratch")
+def import_samples(samples, sample_duckdb, debug, clobber):
+    """
+    Loading samples into duckdb
+    """
+    import chip.vdbtools.importer as importer
+    importer.import_samples(samples, sample_duckdb, debug, clobber)
+    puts(colored.green(f"---> Successfully imported ({samples}) into {sample_duckdb}"))
+
 @cli.command('import-vcf', short_help="import a vcf file into sample variant database")
 @click.option('--caller', 'caller',
               type=click.Choice(['lofreq', 'mutect', 'vardict', 'pindel'], case_sensitive=False),
@@ -42,14 +57,18 @@ def init_db(db_path, sample_name):
               help="The duckdb database to fetch variant ID from")
 @click.option('--sdb', 'sample_duckdb', type=click.Path(), required=True,
               help="The duckdb database to fetch sample ID from")
+@click.option('--window-size', '-w', type=click.INT, default=10_000, show_default=True, required=False,
+              help="The variant window size when bulk updating variants by executemany")
 @click.option('--chromosome', '-c', type=click.STRING, default=None,
               help="The chromosome set of interest")
-def import_vcf(caller, input_vcf, database, chromosome, variant_duckdb, sample_duckdb, clobber):
+@click.option('--debug', '-d', is_flag=True, show_default=True, default=False, required=True,
+              help="Print extra debugging output")
+def import_vcf(caller, input_vcf, database, chromosome, variant_duckdb, sample_duckdb, clobber, debug, window_size):
     """
     variantdb is a path to a sample variant sqlite database.
     """
     import chip.vdbtools.importer as importer
-    importer.import_vcf(database, input_vcf, caller, chromosome, variant_duckdb, sample_duckdb, clobber)
+    importer.import_vcf(database, input_vcf, caller, chromosome, variant_duckdb, sample_duckdb, clobber, debug, window_size)
     puts(colored.green(f"---> Successfully imported ({input_vcf}) into {database}"))
 
 @cli.command('register-variants', short_help="register the variants in a vcf file into redis")
@@ -139,3 +158,28 @@ def import_pon_pileup(variant_duckdb, pon_pileup, batch_number, chromosome, wind
     import chip.vdbtools.importer as importer
     importer.import_pon_pileup(variant_duckdb, pon_pileup, batch_number, chromosome, window_size, debug)
     log.logit(f"---> Successfully imported PoN Pileup from batch ({batch_number}) into {variant_duckdb}", color="green")
+
+@cli.command('calculate-fishers-test', short_help="Updates the variants inside Mutect or Vardict tables with p-value from Fisher's Exact Test")
+@click.option('--vdb', 'variant_duckdb', type=click.Path(exists=True), required=True,
+              help="The duckdb database to fetch variant PoN Ref Depth and Alt Depth from")
+@click.option('--cdb', 'caller_duckdb', type=click.Path(exists=True), required=True,
+              help="The duckdb database to fetch variant caller information from")
+@click.option('--caller', 'caller',
+              type=click.Choice(['lofreq', 'mutect', 'vardict', 'pindel'], case_sensitive=False),
+              required=True,
+              help="Type of VCF file to import")
+@click.option('--batch-number', '-b', type=click.INT, required=True,
+              help="The batch number of this variant set")
+@click.option('--chromosome', '-c', type=click.STRING, default=None,
+              help="The chromosome set of interest")
+@click.option('--window-size', '-w', type=click.INT, default=10_000, show_default=True, required=False,
+              help="The variant window size when bulk updating variants by executemany")
+@click.option('--debug', '-d', is_flag=True, show_default=True, default=False, required=True,
+              help="Print extra debugging output")
+def calculate_fishers_test(variant_duckdb, caller_duckdb, caller, batch_number, chromosome, window_size, debug):
+    """
+    Calculates the Fisher's Exact Test for all Variants within the Variant Caller duckdb
+    """
+    import chip.vdbtools.importers.callers as callers
+    callers.annotate_fisher_test(variant_duckdb, caller_duckdb, caller, batch_number, chromosome, window_size, debug)
+    log.logit(f"---> Successfully calculated the Fisher's Exact Test for variants within ({batch_number}) and {caller_duckdb}", color="green")
