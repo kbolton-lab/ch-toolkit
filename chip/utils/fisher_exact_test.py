@@ -1,15 +1,14 @@
-"""Calculate the factorial of a number."""
-def factorial(n):
-    if n == 0: return 1
-    else: return n * factorial(n-1)
-
-"""Calculate the binomial coefficient n choose k."""
-def choose(n, k):
-    return factorial(n) / (factorial(k) * factorial(n-k))
+import decimal
+from scipy.stats import fisher_exact
 
 def pvalue(PoN_RefDepth, PoN_AltDepth, RefDepth, AltDepth):
     if PoN_RefDepth is None or PoN_AltDepth is None:
-        return 'NULL'
+        return None
     else:
         tbl = [[PoN_RefDepth, PoN_AltDepth], [RefDepth, AltDepth]]
-        return choose(sum(tbl[0]), tbl[0][0]) * choose(sum(tbl[1]), tbl[1][0]) / choose(sum(map(sum, tbl)), sum(tbl[0]))
+        return fisher_exact(tbl, alternative='two-sided').pvalue
+
+def pvalue_variant_sample(variant_id, sample_id, ref_fwd, ref_rev, alt_fwd, alt_rev, PoN_RefDepth, PoN_AltDepth):
+    tbl = [[PoN_RefDepth, PoN_AltDepth], [ref_fwd + ref_rev, alt_fwd + alt_rev]]
+    res = fisher_exact(tbl, alternative='two-sided')
+    return res.pvalue, variant_id, sample_id
