@@ -77,9 +77,9 @@ def create_tmp_csv(work_dir, batch_number, chromosome):
     if in_lsf_session() and tmpdir == '/tmp':
         tmpdir = os.path.join('/tmp', f"{os.environ['LSB_JOBID']}.tmpdir")
     if chromosome is not None:
-        filename = f"batch-{batch_number}.{chromosome}.csv.gz"
+        filename = f"batch-{batch_number}.{chromosome}.csv"
     else:
-        filename = f"batch-{batch_number}.csv.gz"
+        filename = f"batch-{batch_number}.csv"
 
     tmp_path = os.path.join(tmpdir, filename)
     if os.path.exists(tmp_path):
@@ -90,15 +90,23 @@ def create_tmp_csv(work_dir, batch_number, chromosome):
 
 def get_variants(redis_db, batch_number, chromosome):
     set_name = f"batch:{batch_number}"
-    scanner = None
-    if chromosome:
-        scanner = redis_db.sscan_iter(set_name, match=f"{chromosome}:*")
-    else:
-        scanner = redis_db.sscan_iter(set_name)
-
-    for elem in scanner:
-        variant_id = int(redis_db.get(elem))
-        (chrom, pos, ref, alt) = elem.decode().split(':')
+    # scanner = None
+    elems = [elem.decode() for elem in redis_db.smembers(set_name)]
+    # if chromosome:
+    #     scanner = redis_db.keys(f"{chromosome}:*")
+    #     # scanner = redis_db.sscan_iter(set_name, match=f"{chromosome}:*")
+    # else:
+    #     scanner = redis_db.keys(f"chr*")
+    if chromosome is not None:
+        elems = [elem for elem in elems if chromosome in elem]
+    pipe = redis_db.pipeline()
+    for elem in elems:
+        pipe.get(elem)
+    variant_ids = pipe.execute()
+    res = []
+    for i, elem in enumerate(elems):
+        variant_id = int(variant_ids[i])
+        (chrom, pos, ref, alt) = elem.split(':')
         pos = int(pos)
         start = pos
         stop = start + len(alt)
@@ -110,55 +118,36 @@ def get_variants(redis_db, batch_number, chromosome):
             'pos'        : pos,
             'ref'        : ref,
             'alt'        : alt,
+            'snp'        : snp,
+            'qc_pass'    : None,
             'batch'      : batch_number,
             'start'      : start,
             'stop'       : stop,
-            'snp'        : snp,
+            'PoN_RefDepth': None,
+            'PoN_AltDepth': None
         }
-        yield item
+        res.append(item)
+        #yield item
+    return res
 
 def csv_dump(redis_db, batch_number, chromosome, work_dir, debug):
     tmp_csv = create_tmp_csv(work_dir, batch_number, chromosome)
     log.logit(f"Placing variants into temporary csv file: {tmp_csv}")
-
     window_size = 100_000
-    headers = ('variant_id', 'chrom', 'pos', 'ref', 'alt', 'batch', 'start', 'stop', 'snp')
+    headers = ('variant_id', 'chrom', 'pos', 'ref', 'alt', 'snp', 'qc_pass', 'batch', 'start', 'stop', 'PoN_RefDepth', 'PoN_AltDepth')
     variants = get_variants(redis_db, batch_number, chromosome)
-    count = 0
+    count = len(variants)
     with open(tmp_csv, 'wt') as fz, indent(4, quote=' >'):
         writer = csv.DictWriter(fz, fieldnames=headers)
         writer.writeheader()
         log.logit("Beginning to fetch variants into csv file")
-        for variant in variants:
-            count += 1
-            if debug: log.logit(f"{count} -- {variant}")
-            writer.writerow(variant)
-            if count % window_size == 0:
-                log.logit(f"# Variants Processed: {count}")
-
+        writer.writerows(variants)
     log.logit(f"Finished fetching variants into csv file: {count} total variants")
     return (count, tmp_csv)
 
 def duckdb_load_csv_file(duckdb_connection, temp_csv):
     sql = f"""
-        COPY variants
-        FROM read_csv(
-            '{temp_csv}',
-            delim=',',
-            header=True,
-            columns={{
-                'variant_id' : 'BIGINT',
-                'chrom'      : 'VARCHAR(5)',
-                'pos'        : 'INTEGER',
-                'ref'        : 'VARCHAR(255)',
-                'alt'        : 'VARCHAR(255)',
-                'batch'      : 'INTEGER',
-                'start'      : 'INTEGER',
-                'stop'       : 'INTEGER',
-                'snp'        : 'BOOLEAN'
-            }},
-            compression=none
-        )
+        COPY variants FROM '{temp_csv}' (AUTO_DETECT TRUE)
     """
     log.logit(f"Starting to load csv into duckdb")
     duckdb_connection.execute(sql)
@@ -239,8 +228,8 @@ def ingest_variant_batch(duckdb_file, redis_host, redis_port, batch_number, chro
     redis_db = db.redis_connect(redis_host, redis_port)
     duckdb_connection = db.duckdb_connect_rw(duckdb_file, clobber)
     setup_variants_table(duckdb_connection)
-#    counts = insert_variants(redis_db, duckdb_connection, batch_number, chromosome, work_dir, debug)
-    counts = simple_bulk_insert(redis_db, duckdb_connection, batch_number, chromosome, window_size, debug)
+    counts = insert_variants(redis_db, duckdb_connection, batch_number, chromosome, work_dir, debug)
+    #counts = simple_bulk_insert(redis_db, duckdb_connection, batch_number, chromosome, window_size, debug)
     create_indexes(duckdb_connection)
     duckdb_connection.close()
     log.logit(f"Finished ingesting variants")
@@ -294,21 +283,18 @@ def import_pon_pileup(variant_duckdb, pon_pileup, batch_number, chromosome, wind
     log.logit(f"All Done!", color="green")
 
 
-#def merge_variant_tables():
-    #  CREATE TABLE IF NOT EXISTS variants(
-    #      variant_id             BIGINT PRIMARY KEY,
-    #      chrom                  VARCHAR(5),
-    #      pos                    INTEGER,
-    #      ref                    VARCHAR(255) NOT NULL,
-    #      alt                    VARCHAR(255) NOT NULL,
-    #      snp                    BOOLEAN,
-    #      qc_pass                BOOLEAN,
-    #      batch                  INTEGER,
-    #      start                  INTEGER,
-    #      stop                   INTEGER
-    #  );
-    # ATTACH 'batch1.chr21.db' as chr21;
-    # insert into variants select * from chr21.variants;
-    # ATTACH 'batch1.chr22.db' as chr22;
-    # insert into variants select * from chr22.variants;
-    # create_indexes(connection)
+def merge_variant_tables(variants_db, batch_number, clobber, debug):
+    connection = db.duckdb_connect_rw(variants_db, clobber)
+    setup_variants_table(connection)
+    for i in range(1,22):
+        connection.execute(f"ATTACH 'batch{batch_number}.chr{i}.db' as chr{i}")
+        connection.execute(f"insert into variants select * from chr{i}.variants")
+    connection.execute(f"ATTACH 'batch{batch_number}.chrX.db' as chrX")
+    connection.execute(f"insert into variants select * from chrX.variants")
+    connection.execute(f"ATTACH 'batch{batch_number}.chrY.db' as chrY")
+    connection.execute(f"insert into variants select * from chrY.variants")
+    create_indexes(connection)
+    connection.close()
+    log.logit(f"Finished combining all variants DB")
+    #log.logit(f"Variants Processed - Total: {counts}", color="green")
+    log.logit(f"All Done!", color="green")
