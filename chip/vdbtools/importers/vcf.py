@@ -3,7 +3,8 @@ import collections
 import pysam
 import os
 import importlib.resources
-from clint.textui import puts
+from clint.textui import indent, puts_err, puts
+import chip.utils.logger as log
 
 class Vcf:
     def __init__(self, vcf_path):
@@ -16,14 +17,14 @@ class Vcf:
 def load_simple_header(header_type):
     # TODO
     if header_type == "complex":
-        puts("Loading complex VCF header...")
-        retur(source)
+        log.logit("Loading complex VCF header...")
+        return(source)
     else:
-        puts("Loading default VCF header...")
+        log.logit("Loading default VCF header...")
         source = importlib.resources.files('chip.resources.vcf').joinpath('dummy.header')
         return(source)
 
-def write_variants_to_vcf(duckdb_variants, header_type, batch_number, chromosome):
+def write_variants_to_vcf(duckdb_variants, header_type, batch_number, chromosome, debug):
     reader = vcfpy.Reader.from_path(load_simple_header(header_type))
     header = reader.header
     #header = vcfpy.Header(samples = str(batch_number))
@@ -37,22 +38,32 @@ def write_variants_to_vcf(duckdb_variants, header_type, batch_number, chromosome
     #format_field = vcfpy.OrderedDict([('ID', 'GT'), ('Number', '1'), ('Type', 'String'), ('Description', 'Genotype')])
     #header.add_format_line(vcfpy.OrderedDict(format_field))
     header.samples = vcfpy.SamplesInfos(str(batch_number))
-    writer = vcfpy.Writer.from_path(chromosome + '.vcf', header)
-    for variant in sorted(duckdb_variants.fetchall(), key=lambda row: (row[0], row[1])):
-        record = vcfpy.Record(
-            CHROM = variant[0],
-            POS = variant[1],
-            ID = ".",
-            REF = variant[2],
-            ALT = [vcfpy.Substitution(type_ = "", value = variant[3])],
-            QUAL = ".",
-            FILTER = ["PASS"],
-            INFO = {"FAKE" : "."},
-            FORMAT = ["GT"],
-            calls = [vcfpy.Call(sample = str(batch_number), data = {"GT" : "0/1"})]
-        )
-        writer.write_record(record)
+    if chromosome == None:
+        filename = f"batch_" + str(batch_number) + ".vcf"
+    else:
+        filename = chromosome + '.vcf'
+    writer = vcfpy.Writer.from_path(filename, header)
+    log.logit(f"Preparing to write the variants to the VCF: {filename}")
+    with indent(4, quote=' >'):
+        #>> [x for x in a if x <= 5]
+        for variant in sorted(duckdb_variants.fetchall(), key=lambda row: (row[1], row[2])):
+            record = vcfpy.Record(
+                CHROM = variant[1],
+                POS = variant[2],
+                ID = [str(variant[0])],
+                REF = variant[3],
+                ALT = [vcfpy.Substitution(type_ = "", value = variant[4])],
+                QUAL = ".",
+                FILTER = ["PASS"],
+                INFO = {"FAKE" : "."},
+                FORMAT = ["GT"],
+                calls = [vcfpy.Call(sample = str(batch_number), data = {"GT" : "0/1"})]
+            )
+            if debug: log.logit(str(record))
+            writer.write_record(record)
+    log.logit(f"Finished writing the variants to the VCF: {filename}")
     writer.close()
-    pysam.tabix_compress(chromosome + '.vcf', chromosome + '.vcf.gz', force = True)
-    os.unlink(chromosome + '.vcf')
-    pysam.tabix_index(chromosome + '.vcf.gz', preset="vcf", force = True)
+    log.logit(f"Compressing and indexing the VCF: {filename}")
+    pysam.tabix_compress(filename, filename + '.gz', force = True)
+    os.unlink(filename)
+    pysam.tabix_index(filename + '.gz', preset="vcf", force = True)

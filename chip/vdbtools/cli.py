@@ -120,7 +120,7 @@ def ingest_variants(database, redis_host, redis_port, batch_number, chromosome, 
 @cli.command('dump-variants', short_help="dumps all variants inside duckdb into a VCF file")
 @click.option('--db', '-i', 'database', type=click.Path(exists=True), required=True,
               help="The duckdb database to dump the variants from")
-@click.option('--header-type', '-h', type=click.STRING, default=None, required=True,
+@click.option('--header-type', '-t', type=click.STRING, default=None, required=True,
               help="A pre-existing header type e.g. simple, mutect, vardict, complex, etc.")
 @click.option('--batch-number', '-b', type=click.INT, required=True,
               help="The batch number of this variant set")

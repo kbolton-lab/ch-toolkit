@@ -236,16 +236,21 @@ def ingest_variant_batch(duckdb_file, redis_host, redis_port, batch_number, chro
     log.logit(f"Variants Processed - Total: {counts}", color="green")
     log.logit(f"All Done!", color="green")
 
-def get_variants_from_table(duckdb_connection, batch_number):
-    sql = f"SELECT chrom, pos, ref, alt FROM variants WHERE batch = {batch_number}"
+def get_variants_from_table(duckdb_connection, batch_number, chromosome):
+    if chromosome != None:
+        log.logit(f"Grabbing variants from batch: {batch_number} and chromosome: {chromosome} from the database")
+        sql = f"SELECT variant_id, chrom, pos, ref, alt FROM variants WHERE batch = {batch_number} AND chrom = \'{chromosome}\'"
+    else:
+        log.logit(f"Grabbing variants from batch: {batch_number} from the database")
+        sql = f"SELECT variant_id, chrom, pos, ref, alt FROM variants WHERE batch = {batch_number}"
     return duckdb_connection.sql(sql)
 
 def dump_variant_batch(duckdb_file, header, batch_number, chromosome, work_dir, debug):
     import chip.vdbtools.importers.vcf as vcf
     log.logit(f"Dumping variants from batch: {batch_number} and chromosome: {chromosome} into a VCF file", color="green")
     duckdb_connection = db.duckdb_connect(duckdb_file)
-    variants = get_variants_from_table(duckdb_connection, batch_number)
-    vcf.write_variants_to_vcf(variants, header, batch_number, chromosome)
+    variants = get_variants_from_table(duckdb_connection, batch_number, chromosome)
+    vcf.write_variants_to_vcf(variants, header, batch_number, chromosome, debug)
     duckdb_connection.close()
     log.logit(f"Finished dumping variants into VCF file")
 

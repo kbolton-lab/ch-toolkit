@@ -35,6 +35,14 @@ def setup_samples_tbl(connection):
     drop_indexes_samples(connection)
     return connection
 
+def load_sample_csv_file(connection, csv):
+    sql = f"""
+        COPY variants FROM '{csv}' (AUTO_DETECT TRUE)
+    """
+    log.logit(f"Starting to load csv into duckdb")
+    duckdb_connection.execute(sql)
+    log.logit(f"Finished loading csv into duckdb")
+
 def bulk_insert_samples(connection, entries):
     sql = f"INSERT INTO samples (sample_id, sample_name) VALUES (?, ?)"
     log.logit(f"Starting to bulk insert samples into duckdb ( {len(entries)} items)")
