@@ -286,15 +286,16 @@ def import_pon_pileup(variant_duckdb, pon_pileup, batch_number, chromosome, wind
 def merge_variant_tables(variants_db, batch_number, clobber, debug):
     connection = db.duckdb_connect_rw(variants_db, clobber)
     setup_variants_table(connection)
-    for i in range(1,22):
+    chromosomes = [str(c) for c in range(1,23)]
+    chromosomes.extend(['X', 'Y'])
+    for i in chromosomes:
+        log.logit(f'Merging chromosome: {i}')
         connection.execute(f"ATTACH 'batch{batch_number}.chr{i}.db' as chr{i}")
         connection.execute(f"insert into variants select * from chr{i}.variants")
-    connection.execute(f"ATTACH 'batch{batch_number}.chrX.db' as chrX")
-    connection.execute(f"insert into variants select * from chrX.variants")
-    connection.execute(f"ATTACH 'batch{batch_number}.chrY.db' as chrY")
-    connection.execute(f"insert into variants select * from chrY.variants")
+    log.logit("Finished merging chromosomes")
+    log.logit("Creating Indexes")
     create_indexes(connection)
     connection.close()
-    log.logit(f"Finished combining all variants DB")
+    log.logit(f"Finished combining all variants into: {variants_db}")
     #log.logit(f"Variants Processed - Total: {counts}", color="green")
     log.logit(f"All Done!", color="green")
