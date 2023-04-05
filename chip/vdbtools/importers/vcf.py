@@ -39,14 +39,18 @@ def write_variants_to_vcf(duckdb_variants, header_type, batch_number, chromosome
     #header.add_format_line(vcfpy.OrderedDict(format_field))
     header.samples = vcfpy.SamplesInfos(str(batch_number))
     if chromosome == None:
-        filename = f"batch_" + str(batch_number) + ".vcf"
+        filename = f"batch-" + str(batch_number) + ".vcf"
     else:
         filename = chromosome + '.vcf'
     writer = vcfpy.Writer.from_path(filename, header)
     log.logit(f"Preparing to write the variants to the VCF: {filename}")
     with indent(4, quote=' >'):
-        #>> [x for x in a if x <= 5]
-        for variant in sorted(duckdb_variants.fetchall(), key=lambda row: (row[1], row[2])):
+        log.logit(f"Starting to sort variants...")
+        variants = sorted(duckdb_variants.fetchall(), key=lambda row: (row[1], row[2]))
+        total = len(variants)
+        log.logit(f"Finished sorting {total} variants")
+        log.logit(f"Writing to VCF...")
+        for i, variant in enumerate(variants):
             record = vcfpy.Record(
                 CHROM = variant[1],
                 POS = variant[2],
@@ -61,7 +65,9 @@ def write_variants_to_vcf(duckdb_variants, header_type, batch_number, chromosome
             )
             if debug: log.logit(str(record))
             writer.write_record(record)
-    log.logit(f"Finished writing the variants to the VCF: {filename}")
+            if i % 1_000_000 == 0 and i != 0:
+                log.logit(f"{i} variants written to: {filename}")
+    log.logit(f"Finished writing {total} variants to the VCF: {filename}")
     writer.close()
     log.logit(f"Compressing and indexing the VCF: {filename}")
     pysam.tabix_compress(filename, filename + '.gz', force = True)
