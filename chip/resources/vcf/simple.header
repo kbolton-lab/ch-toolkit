@@ -1,0 +1,4 @@
+##fileformat=VCFv4.3
+##INFO=<ID=FAKE,Number=1,Type=String,Description="Dummy Value">
+##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT

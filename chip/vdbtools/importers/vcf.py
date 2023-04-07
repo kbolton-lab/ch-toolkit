@@ -1,10 +1,13 @@
 import vcfpy
 import collections
 import pysam
-import os
+import os, io, gzip
+
 import importlib.resources
-from clint.textui import indent, puts_err, puts
 import chip.utils.logger as log
+import pandas as pd
+
+from clint.textui import indent, puts_err, puts
 
 class Vcf:
     def __init__(self, vcf_path):
@@ -14,16 +17,140 @@ class Vcf:
     def reset_reader(self):
         self.reader = vcfpy.Reader.from_path(self.vcf_path)
 
+def duckdb_load_df_file(duckdb_connection, df, table):
+    sql = f"""
+        INSERT INTO {table} SELECT * FROM df
+    """
+    log.logit(f"Starting to insert pandas dataframe into duckdb")
+    duckdb_connection.execute(sql)
+    log.logit(f"Finished inserting pandas dataframe into duckdb")
+
+def vcf_to_pd(input_vcf, what_process, batch_number, debug):
+    log.logit(f"Processing: {input_vcf}")
+    dispatch = {
+        'variants'  : variants_to_df,
+        'caller'    : caller_to_df,
+        'pileup'    : pileup_to_df
+    }
+    function = dispatch[what_process]
+    return function(input_vcf, batch_number, debug)
+
+def variants_to_df(input_vcf, batch_number, debug):
+    log.logit(f"Reading in the Variants VCF...")
+    res = pd.read_csv(input_vcf,
+            comment='#',
+            compression='gzip',
+            sep='\t',
+            header=None,
+            usecols=[0,1,3,4]).rename(columns={0: "chrom",
+                                              1: "pos",
+                                              3: "ref",
+                                              4: "alt"})
+    log.logit(f"Finished reading in the variant VCF")
+    res['snp'] = (res['ref'].apply(len) == 1) & (res['alt'].apply(len) == 1)
+    res['qc_pass'] = None
+    res['batch'] = batch_number
+    res['start'] = res['pos']
+    res['end'] = res['pos'] + res['alt'].apply(len)
+    res['PoN_RefDepth'] = None
+    res['PoN_AltDepth'] = None
+    res['key'] = res['chrom'] + ':' + res['pos'].astype(str) + ':' + res['ref'] + ':' + res['alt']
+    total = len(res)
+    return total, res
+
+def pileup_to_df(input_vcf, batch_number, debug):
+    log.logit(f"Reading in the Pileup VCF...")
+    res = pd.read_csv(input_vcf,
+            comment='#',
+            compression='gzip',
+            sep='\t',
+            header=None,
+            usecols=[0,1,3,4,7]).rename(columns={0: "chrom",
+                                              1: "pos",
+                                              3: "ref",
+                                              4: "alt",
+                                              7: "info"})
+    log.logit(f"Finished reading in the pileup VCF")
+    res[['PoN_RefDepth','PoN_AltDepth']] = res['info'].str.split(";", expand=True)
+    res['PoN_RefDepth'] = res['PoN_RefDepth'].str.split("=").str[1]
+    res['PoN_AltDepth'] = res['PoN_AltDepth'].str.split("=").str[1]
+    res['snp'] = None
+    res['qc_pass'] = None
+    res['batch'] = batch_number
+    res['start'] = None
+    res['end'] = None
+    res['key'] = res['chrom'] + ':' + res['pos'].astype(str) + ':' + res['ref'] + ':' + res['alt']
+    res = res[['chrom', 'pos', 'ref', 'alt', 'snp', 'qc_pass', 'batch', 'start', 'end', 'PoN_RefDepth', 'PoN_AltDepth', 'key']]
+    total = len(res)
+    return total, res
+
+def caller_to_df(input_vcf, batch_number, debug):
+    log.logit(f"Reading in the VCF...")
+    res = pd.read_csv(input_vcf,
+            comment='#',
+            compression='gzip',
+            sep='\t',
+            header=None,
+            usecols=[0,1,3,4,6,7,8,9]).rename(columns={0: "chrom",
+                                              1: "pos",
+                                              3: "ref",
+                                              4: "alt",
+                                              6: "filter",
+                                              7: "info",
+                                              8: "format",
+                                              9: "sample"})
+    log.logit(f"Finished reading in the VCF")
+
+    res['key'] = res['chrom'] + ':' + res['pos'].astype(str) + ':' + res['ref'] + ':' + res['alt'] #Key needed to get VariantID
+    res = res.drop(columns=['chrom', 'pos', 'ref', 'alt'])
+    res['filter'] = res['filter'].str.split(";")
+    total = len(res)
+    return total, res
+
 def load_simple_header(header_type):
     # TODO
     if header_type == "complex":
         log.logit("Loading complex VCF header...")
+        return(source)
+    elif header_type == "simple":
+        log.logit("Loading simple VCF header...")
+        source = importlib.resources.files('chip.resources.vcf').joinpath('simple.header')
         return(source)
     else:
         log.logit("Loading default VCF header...")
         source = importlib.resources.files('chip.resources.vcf').joinpath('dummy.header')
         return(source)
 
+def variants_to_vcf(duckdb_variants, header_type, batch_number, chromosome, debug):
+    if chromosome == None:
+        filename = f"batch-" + str(batch_number) + ".vcf"
+    else:
+        filename = chromosome + '.vcf'
+    reader = open(load_simple_header(header_type), "r")
+    header = reader.read()
+    reader.close()
+    log.logit(f"Preparing to write the variants to the VCF: {filename}")
+    log.logit(f"Starting to sort variants...")
+    variants = duckdb_variants.df().sort_values(by=['chrom', 'pos'], ascending = True)
+    variants['ROWID']
+    variants['qual'] = "."
+    variants['filter'] = "PASS"
+    variants['info'] = "."
+    variants['format'] = "GT"
+    variants['sample'] = "0/1"
+    variants = variants[['chrom', 'pos', 'ROWID', 'ref', 'alt', 'qual', 'filter', 'info', 'format']]
+    total = len(variants.index)
+    with open(filename, 'w') as writer:
+        writer.write(header)
+    log.logit(f"Writing to VCF...")
+    variants.to_csv(filename, sep="\t", mode='a', index=False, header=False)
+    log.logit(f"Finished writing {total} variants to the VCF: {filename}")
+    log.logit(f"Compressing and indexing the VCF: {filename}")
+    pysam.tabix_compress(filename, filename + '.gz', force = True)
+    os.unlink(filename)
+    pysam.tabix_index(filename + '.gz', preset="vcf", force = True)
+
+# DEPRECATED
 def write_variants_to_vcf(duckdb_variants, header_type, batch_number, chromosome, debug):
     reader = vcfpy.Reader.from_path(load_simple_header(header_type))
     header = reader.header

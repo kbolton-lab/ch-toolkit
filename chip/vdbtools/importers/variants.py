@@ -2,13 +2,13 @@ import os, csv, glob
 import vcfpy
 import duckdb
 
+import chip.vdbtools.importers.vcf as vcf
 import chip.utils.logger as log
 import chip.utils.database as db
 import chip.utils.csv_utils as csv_utils
 from clint.textui import indent, puts_err, puts
 
-#            variant_id             BIGINT PRIMARY KEY,
-def ensure_variants_table(connection):
+def ensure_variants_table_(connection):
     log.logit("Ensuring or creating the variants table")
     sql = """
         CREATE TABLE IF NOT EXISTS variants(
@@ -22,7 +22,29 @@ def ensure_variants_table(connection):
             start                  INTEGER,
             stop                   INTEGER,
             PoN_RefDepth           INTEGER,
-            PoN_AltDepth           INTEGER
+            PoN_AltDepth           INTEGER,
+            key                    VARCHAR NOT NULL
+        )
+    """
+    connection.execute(sql)
+
+def ensure_variants_table(connection):
+    log.logit("Ensuring or creating the variants table")
+    sql = """
+        CREATE TABLE IF NOT EXISTS variants(
+            variant_id             BIGINT PRIMARY KEY,
+            chrom                  VARCHAR(5),
+            pos                    INTEGER,
+            ref                    VARCHAR(255) NOT NULL,
+            alt                    VARCHAR(255) NOT NULL,
+            snp                    BOOLEAN,
+            qc_pass                BOOLEAN,
+            batch                  INTEGER,
+            start                  INTEGER,
+            stop                   INTEGER,
+            PoN_RefDepth           INTEGER,
+            PoN_AltDepth           INTEGER,
+            key                    VARCHAR NOT NULL
         )
     """
     connection.execute(sql)
@@ -62,7 +84,7 @@ def create_indexes(connection):
 
 def setup_variants_table(connection):
     log.logit("Preparing the variant database file")
-    ensure_variants_table(connection)
+    ensure_variants_table_(connection)
     drop_indexes(connection)
     return connection
 
@@ -102,7 +124,8 @@ def get_variants(redis_db, batch_number, chromosome):
             'start'      : start,
             'stop'       : stop,
             'PoN_RefDepth': None,
-            'PoN_AltDepth': None
+            'PoN_AltDepth': None,
+            'key'        : f"{chrom}:{pos}:{ref}:{alt}"
         }
         res.append(item)
         #yield item
@@ -112,7 +135,7 @@ def csv_dump(redis_db, batch_number, chromosome, work_dir, debug):
     tmp_csv = csv_utils.create_tmp_csv(work_dir, batch_number, chromosome)
     log.logit(f"Placing variants into temporary csv file: {tmp_csv}")
     window_size = 100_000
-    headers = ('variant_id', 'chrom', 'pos', 'ref', 'alt', 'snp', 'qc_pass', 'batch', 'start', 'stop', 'PoN_RefDepth', 'PoN_AltDepth')
+    headers = ('variant_id', 'chrom', 'pos', 'ref', 'alt', 'snp', 'qc_pass', 'batch', 'start', 'stop', 'PoN_RefDepth', 'PoN_AltDepth', 'key')
     variants = get_variants(redis_db, batch_number, chromosome)
     count = len(variants)
     with open(tmp_csv, 'wt') as fz, indent(4, quote=' >'):
@@ -189,33 +212,49 @@ def bulk_update_pileup(duckdb_connection, entries):
 #             bulk_insert(duckdb_connection, window)
 #     return count
 
-def merge_variants_tables(db_path, connection, batch_number, debug, clobber):
+def merge_variants_tables(db_path, connection, batch_number, debug):
     log.logit(f'Merging Sample Variants')
     with indent(4, quote=' >'):
         for i, file in enumerate(glob.glob(db_path + "*.db")):
             sample_name = os.path.basename(file).split('.')[1]
             log.logit(f"Merging: {file}")
             connection.execute(f"ATTACH \'{file}\' as sample_{i}")
+            # sql = f"""
+            #     INSERT INTO variants SELECT s.*
+            #     FROM sample_{i}.variants s
+            #     WHERE NOT EXISTS (
+            #         SELECT *
+            #         FROM variants v
+            #         WHERE s.key = v.key
+            #     )
+            # """
             sql = f"""
                 INSERT INTO variants SELECT s.*
                 FROM sample_{i}.variants s
-                WHERE NOT EXISTS (
-                    SELECT *
+                WHERE s.key NOT IN (
+                    SELECT key
                     FROM variants v
-                    WHERE (
-                        s.chrom = v.chrom
-                        AND s.pos = v.pos
-                        AND s.ref = v.ref
-                        AND s.alt = v.alt
+                    WHERE v.key IN (
+                        SELECT key
+                        FROM sample_{i}.variants
                     )
                 )
             """
             connection.sql(sql)
     log.logit(f"Finished merging all tables from: {db_path}")
-    #log.logit(f"Variants Processed - Total: {counts}", color="green")
 
-    #     connection.execute(f"ATTACH 'batch{batch_number}.chr{i}.db' as chr{i}")
-    #     connection.execute(f"insert into variants select * from chr{i}.variants")
+def update_pileup_variants(connection, pileup_db, debug):
+    log.logit(f"Updating Pileup Information: {pileup_db} into Variants")
+    with indent(4, quote=' >'):
+        connection.execute(f"ATTACH \'{pileup_db}\' as pileup")
+        sql = f"""
+            UPDATE variants as v
+            SET PoN_RefDepth = p.PoN_RefDepth, PoN_AltDepth = p.PoN_AltDepth
+            FROM pileup.variants p
+            WHERE v.key = p.key
+        """
+        connection.sql(sql)
+    log.logit(f"Finished annotating variants with pileup information")
 
 def merge_variants_tables_chromosomes(variants_db, batch_number, clobber, debug):
     connection = db.duckdb_connect_rw(variants_db, clobber)
@@ -250,24 +289,24 @@ def ingest_variant_batch(duckdb_file, redis_host, redis_port, batch_number, chro
     log.logit(f"Variants Processed - Total: {counts}", color="green")
     log.logit(f"All Done!", color="green")
 
-def ingest_variant_batch_(db_path, variant_db, batch_number, debug, clobber, work_dir):
+def ingest_variant_batch_(db_path, variant_db, batch_number, debug, clobber):
     log.logit(f"Ingesting variants from batch: {batch_number} into {variant_db}", color="green")
     connection = db.duckdb_connect_rw(variant_db, clobber)
     setup_variants_table(connection)
-    merge_variants_tables(db_path, connection, batch_number, debug, clobber)
+    merge_variants_tables(db_path, connection, batch_number, debug)
+    connection.execute("ALTER TABLE variants ADD COLUMN IF NOT EXISTS variant_id BIGINT")
+    connection.execute("UPDATE variants SET variant_id = ROWID")
     create_indexes(connection)
     connection.close()
     log.logit(f"Finished ingesting variants")
-    #log.logit(f"Variants Processed - Total: {counts}", color="green")
     log.logit(f"All Done!", color="green")
 
-def import_sample_variants(input_vcf, duck_db, batch_number, debug, clobber, work_dir):
+def import_sample_variants(input_vcf, duck_db, batch_number, debug, clobber):
     log.logit(f"Registering variants from file: {input_vcf}", color="green")
     connection = db.duckdb_connect_rw(duck_db, clobber)
     setup_variants_table(connection)
-    headers = ('chrom', 'pos', 'ref', 'alt', 'snp', 'qc_pass', 'batch', 'start', 'stop', 'PoN_RefDepth', 'PoN_AltDepth')
-    counts, tmp_csv = csv_utils.vcf_to_csv(input_vcf, "variants", headers, batch_number, work_dir, debug)
-    csv_utils.duckdb_load_csv_file(connection, tmp_csv, "variants")
+    counts, df = vcf.vcf_to_pd(input_vcf, "variants", batch_number, debug)
+    vcf.duckdb_load_df_file(connection, df, "variants")
     create_indexes(connection)
     connection.close()
     log.logit(f"Finished registering variants")
@@ -284,47 +323,53 @@ def get_variants_from_table(connection, batch_number, chromosome):
     return connection.sql(sql)
 
 def dump_variant_batch(variant_db, header, batch_number, chromosome, debug):
-    import chip.vdbtools.importers.vcf as vcf
     if chromosome is None:
         log.logit(f"Dumping batch: {batch_number} variants from: {variant_db} into a VCF file", color="green")
     else:
         log.logit(f"Dumping batch: {batch_number} and chromosome: {chromosome} variants from: {variant_db} into a VCF file", color="green")
     connection = db.duckdb_connect(variant_db)
     variants = get_variants_from_table(connection, batch_number, chromosome)
-    vcf.write_variants_to_vcf(variants, header, batch_number, chromosome, debug)
+    #vcf.write_variants_to_vcf(variants, header, batch_number, chromosome, debug)
+    vcf.variants_to_vcf(variants, header, batch_number, debug)
     connection.close()
     log.logit(f"Finished dumping variants into VCF file")
     log.logit(f"All Done!", color="green")
 
-def annotate_variants_with_pon_pileup(connection, pon_pileup, chromosome, window_size, debug):
-    log.logit(f"Importing pileup information in increments of {window_size}")
-    reader = vcfpy.Reader.from_path(pon_pileup)
-    variants = reader.fetch(chromosome) if chromosome != None else reader
-    attributes = ('PoN_RefDepth', 'PoN_AltDepth')
-    window = []
-    count = 0
-    with indent(4, quote=' >'):
-        for (i, variant) in enumerate(variants):
-            row = (variant.INFO.get('PON_RefDepth')[0], variant.INFO.get('PON_AltDepth')[0], variant.CHROM, variant.POS, variant.REF, variant.ALT[0].value)
-            if debug: log.logit(f"{i} -- {row}")
-            window.append( row )
-            if i % window_size == 0 and i != 0:
-                bulk_update_pileup(connection, window)
-                log.logit(f"# Variants Processed: {i}")
-                window = []
-            count += 1
-        if len(window) > 0:
-            bulk_update_pileup(connection, window)
-    return count
+# def annotate_variants_with_pon_pileup(connection, pon_pileup, chromosome, debug):
+#     log.logit(f"Importing pileup information...")
+#     reader = vcfpy.Reader.from_path(pon_pileup)
+#     variants = reader.fetch(chromosome) if chromosome != None else reader
+#     #attributes = ('PoN_RefDepth', 'PoN_AltDepth')
+#     #window = []
+#     #count = 0
+#     with indent(4, quote=' >'):
+#         for (i, variant) in enumerate(variants):
+#             row = (variant.INFO.get('PON_RefDepth')[0], variant.INFO.get('PON_AltDepth')[0], variant.CHROM, variant.POS, variant.REF, variant.ALT[0].value)
+#             if debug: log.logit(f"{i} -- {row}")
+#             window.append( row )
+#             if i % window_size == 0 and i != 0:
+#                 bulk_update_pileup(connection, window)
+#                 log.logit(f"# Variants Processed: {i}")
+#                 window = []
+#             count += 1
+#         if len(window) > 0:
+#             bulk_update_pileup(connection, window)
+#     return count
 
-def import_pon_pileup(variant_duckdb, pon_pileup, batch_number, chromosome, window_size, debug):
-    if chromosome:
-        log.logit(f"Adding pileup from batch: {batch_number} and chromosome: {chromosome} into {variant_duckdb}", color="green")
-    else:
-        log.logit(f"Adding pileup from batch: {batch_number} into {variant_duckdb}", color="green")
-    variant_duckdb_connection = db.duckdb_connect_rw(variant_duckdb, False)
-    counts = annotate_variants_with_pon_pileup(variant_duckdb_connection, pon_pileup, chromosome, window_size, debug)
-    variant_duckdb_connection.close()
-    log.logit(f"Finished importing PoN pileup information")
+def import_pon_pileup(variant_db, pon_pileup, batch_number, debug, clobber):
+    pileup_db = f"batch{batch_number}.pileup.db"
+    log.logit(f"Adding pileup from batch: {batch_number} into {variant_db}", color="green")
+    connection = db.duckdb_connect_rw(pileup_db, clobber)
+    setup_variants_table(connection)
+    counts, df = vcf.vcf_to_pd(pon_pileup, "pileup", batch_number, debug)
+    vcf.duckdb_load_df_file(connection, df, "variants")
+    create_indexes(connection)
+    connection.close()
+    log.logit(f"Importing pileup information into {variant_db}")
+    connection = db.duckdb_connect_rw(variant_db, False)
+    update_pileup_variants(connection, pileup_db, debug)
+    connection.close()
+    os.unlink(pileup_db)
+    log.logit(f"Finished importing pileup information")
     log.logit(f"Variants Processed - Total: {counts}", color="green")
     log.logit(f"All Done!", color="green")
