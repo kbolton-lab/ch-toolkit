@@ -84,26 +84,82 @@ def pileup_to_df(input_vcf, batch_number, debug):
     total = len(res)
     return total, res
 
+def getFields(fields):
+    typeMap = {
+        'String': str,
+        'Float': float,
+        'Integer': int,
+        'Flag': bool
+    }
+    fields = [[x.split('=')[-1] for x in field[:3]] for field in fields]
+    for field in fields:
+        if field[1] == 'R':
+            field[2] = str
+        elif field[2] == 'Integer' and field[1] != 'A' and field[1] != 'G' and int(field[1]) > 1:
+            field[2] = str
+        else:
+            field[2] = typeMap[field[2]]
+    fields = {field[0]:field[2] for field in fields}
+    return fields
+
+# Input: info_tags row     [['AS_FilterStatus', 'weak_evidence,map_qual']
+#                          ['AS_SB_TABLE', '7,13|1,2'] ... etc ]
+# Output: list of values   ['weak_evidence,map_qual', '7,13|1,2', None, None, ... etc ]
+def splitInfor(x, fields):
+    x = [y.split('=') for y in x.split(';')]
+    res = {}
+    for kv in x:
+        if len(kv) == 2:
+            res[kv[0]] = kv[1]
+        else:
+            res[kv[0]] = True
+    res = [fields[field](res[field]) if field in res else None for field in fields]
+    return res
+
+def combineAndSplit(format, sample, fields):
+    res = {format.split(':')[field]: sample.split(':')[field] for field in range(len(format.split(':')))}
+    res = [fields[field](res[field]) if field in res else None for field in fields]
+    return res
+
 def caller_to_df(input_vcf, batch_number, debug):
     log.logit(f"Reading in the VCF...")
-    res = pd.read_csv(input_vcf,
-            comment='#',
-            compression='gzip',
-            sep='\t',
-            header=None,
-            usecols=[0,1,3,4,6,7,8,9]).rename(columns={0: "chrom",
-                                              1: "pos",
-                                              3: "ref",
-                                              4: "alt",
-                                              6: "filter",
-                                              7: "info",
-                                              8: "format",
-                                              9: "sample"})
-    log.logit(f"Finished reading in the VCF")
+    info_fields, format_fields = [], []
+    with gzip.open(input_vcf, 'rt') as f:
+        for line in f:
+            if line.startswith('##INFO'):
+                info_fields.append(line.split(','))
+            elif line.startswith('##FORMAT'):
+                format_fields.append(line.split(','))
+            elif line.startswith('#CHROM'):
+                header = line.strip('\n').split('\t')
+                break
+    f.close()
+    info_fields = getFields(info_fields)
+    format_fields = getFields(format_fields)
+    header[-1] = "SAMPLE"
 
-    res['key'] = res['chrom'] + ':' + res['pos'].astype(str) + ':' + res['ref'] + ':' + res['alt'] #Key needed to get VariantID
-    res = res.drop(columns=['chrom', 'pos', 'ref', 'alt'])
-    res['filter'] = res['filter'].str.split(";")
+    res = pd.read_csv(input_vcf,
+                comment='#',
+                compression='gzip',
+                sep='\t',
+                header=None,
+                names=header).rename(columns={'#CHROM':'CHROM'})
+    log.logit(f"Finished reading in the VCF")
+    log.logit(f"Parsing and formatting INFO and FORMAT columns...")
+    info_field_values = pd.DataFrame(list(res['INFO'].apply(lambda x: splitInfor(x, info_fields) ).values),
+                                    columns=info_fields.keys())
+    info_field_values.columns = info_field_values.columns.str.lower()
+    info_field_values = info_field_values.add_prefix('info_')
+    format_field_values = pd.DataFrame(list(res[['FORMAT', 'SAMPLE']].apply(lambda x: combineAndSplit(*x, format_fields), axis=1).values),
+                                    columns=format_fields.keys())
+    format_field_values.columns = format_field_values.columns.str.lower()
+    format_field_values = format_field_values.add_prefix('format_')
+
+    res = pd.concat([res.drop('INFO', axis=1), info_field_values], axis=1)
+    res = pd.concat([res.drop(['FORMAT', 'SAMPLE'], axis=1), format_field_values], axis=1)
+    log.logit(f"Finished formatting INFO and FORMAT columns...")
+    res['key'] = res['CHROM'] + ':' + res['POS'].astype(str) + ':' + res['REF'] + ':' + res['ALT'] #Key needed to get VariantID
+    res['FILTER'] = res['FILTER'].str.split(";")
     total = len(res)
     return total, res
 

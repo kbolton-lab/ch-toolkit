@@ -67,6 +67,7 @@ def create_indexes(connection):
             ON variants ( chrom, pos, ref, alt )
         """
         connection.execute(sql)
+        #duckdb.sql(sql).show()
 
         # log.logit("Generating the variant_id_idx")
         # sql = """
@@ -81,6 +82,7 @@ def create_indexes(connection):
             ON variants ( batch )
         """
         connection.execute(sql)
+        #duckdb.sql(sql).show()
 
 def setup_variants_table(connection):
     log.logit("Preparing the variant database file")

@@ -41,7 +41,7 @@ def import_samples(samples, sample_duckdb, debug, clobber):
     importer.import_samples(samples, sample_duckdb, debug, clobber)
     puts(colored.green(f"---> Successfully imported ({samples}) into {sample_duckdb}"))
 
-# TODO
+# DONE
 @cli.command('import-vcf', short_help="import a vcf file into sample variant database")
 @click.option('--caller', 'caller',
               type=click.Choice(['mutect', 'vardict'], case_sensitive=False),
@@ -170,26 +170,18 @@ def import_pon_pileup(variant_db, pon_pileup, batch_number, debug, clobber):
 
 # TODO
 @cli.command('calculate-fishers-test', short_help="Updates the variants inside Mutect or Vardict tables with p-value from Fisher's Exact Test")
-@click.option('--vdb', 'variant_duckdb', type=click.Path(exists=True), required=True,
-              help="The duckdb database to fetch variant PoN Ref Depth and Alt Depth from")
-@click.option('--cdb', 'caller_duckdb', type=click.Path(exists=True), required=True,
-              help="The duckdb database to fetch variant caller information from")
+@click.option('--vdb', 'variant_db', type=click.Path(exists=True), required=True, help="The duckdb database to fetch variant PoN Ref Depth and Alt Depth from")
+@click.option('--cdb', 'caller_db', type=click.Path(exists=True), required=True, help="The duckdb database to fetch variant caller information from")
 @click.option('--caller', 'caller',
-              type=click.Choice(['lofreq', 'mutect', 'vardict', 'pindel'], case_sensitive=False),
+              type=click.Choice(['mutect', 'vardict'], case_sensitive=False),
               required=True,
               help="Type of VCF file to import")
-@click.option('--batch-number', '-b', type=click.INT, required=True,
-              help="The batch number of this variant set")
-@click.option('--chromosome', '-c', type=click.STRING, default=None,
-              help="The chromosome set of interest")
-@click.option('--window-size', '-w', type=click.INT, default=10_000, show_default=True, required=False,
-              help="The variant window size when bulk updating variants by executemany")
-@click.option('--debug', '-d', is_flag=True, show_default=True, default=False, required=True,
-              help="Print extra debugging output")
-def calculate_fishers_test(variant_duckdb, caller_duckdb, caller, batch_number, chromosome, window_size, debug):
+@click.option('--batch-number', '-b', type=click.INT, required=True, help="The batch number of this variant set")
+@click.option('--debug', '-d', is_flag=True, show_default=True, default=False, required=True, help="Print extra debugging output")
+def calculate_fishers_test(variant_db, caller_db, caller, batch_number, debug):
     """
     Calculates the Fisher's Exact Test for all Variants within the Variant Caller duckdb
     """
     import chip.vdbtools.importers.callers as callers
-    callers.annotate_fisher_test(variant_duckdb, caller_duckdb, caller, batch_number, chromosome, window_size, debug)
-    log.logit(f"---> Successfully calculated the Fisher's Exact Test for variants within ({batch_number}) and {caller_duckdb}", color="green")
+    callers.annotate_fisher_test(variant_db, caller_db, caller, batch_number, debug)
+    log.logit(f"---> Successfully calculated the Fisher's Exact Test for variants within ({batch_number}) and {caller_db}", color="green")

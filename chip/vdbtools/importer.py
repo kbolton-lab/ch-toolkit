@@ -18,7 +18,7 @@ def import_vcf(db_path, input_vcf, caller, variant_db, sample_db, batch_number, 
 
 def import_mutect(db_path, input_vcf, variant_db, sample_db, batch_number, clobber, debug):
     import chip.vdbtools.importers.callers as callers
-    callers.insert_mutect_caller_(db_path, input_vcf, variant_db, sample_db, batch_number, clobber, debug)
+    callers.insert_mutect_caller(db_path, input_vcf, variant_db, sample_db, batch_number, clobber, debug)
 
 def import_vardict(db_path, input_vcf, variant_db, sample_db, batch_number, clobber, debug):
     import chip.vdbtools.importers.callers as callers
@@ -35,3 +35,5 @@ def import_variant_batch_(db_path, variant_db, batch_number, debug, clobber):
 def import_pon_pileup(variant_duckdb, pon_pileup, batch_number, debug, clobber):
     import chip.vdbtools.importers.variants as variants
     variants.import_pon_pileup(variant_duckdb, pon_pileup, batch_number, debug, clobber)
+
+#venv_ic/bin/chip-variant-db import-vcf --caller mutect --input-vcf data/external/washu-cad-1/H_VL-MI-00052-AB43684226/mutect.H_VL-MI-00052-AB43684226.vcf.gz -i mutect.test_old.db -f -b 1 --vdb variants.db --sdb samples.db
