@@ -270,7 +270,7 @@ def insert_vardict_caller(db_path, input_vcf, variant_db, sample_db, batch_numbe
     vcf.duckdb_load_df_file(caller_connection, df, "vardict")
     create_indexes(caller_connection, "vardict")
     caller_connection.close()
-    #annotate_fisher_test(variant_db, db_path, "vardict", batch_number, debug)
+    annotate_fisher_test(variant_db, db_path, "vardict", batch_number, debug)
     log.logit(f"Finished inserting vardict variants")
     log.logit(f"Variants Processed - Total: {counts}", color="green")
     log.logit(f"All Done!", color="green")
@@ -286,7 +286,7 @@ def annotate_fisher_test(variant_db, caller_db, caller, batch_number, debug):
         SELECT c.variant_id, c.sample_id, v.PoN_RefDepth, v.PoN_AltDepth, c.format_ref_fwd, c.format_ref_rev, c.format_alt_fwd, c.format_alt_rev,
         FROM {caller} c LEFT JOIN temp_variants.variants v
         ON c.variant_id = v.variant_id
-        WHERE c.fisher_p_value is NULL
+        WHERE c.fisher_p_value is NULL AND PoN_RefDepth is NOT NULL AND PoN_AltDepth is NOT NULL
     '''
     df = caller_connection.execute(sql).df()
     length = len(df.index)
