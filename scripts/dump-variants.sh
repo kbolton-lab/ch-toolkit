@@ -12,10 +12,8 @@ DUMMY_HEADER=$4
 VIRTUALENV=${SCRIPT_DIR}/../venv_ic
 BASE_CMD=${VIRTUALENV}/bin/chip-variant-db
 
-# Redis
-
 ${BASE_CMD} dump-variants \
-    --db=${DB} \
-    --header=${DUMMY_HEADER}
-    --batch-number=${BATCH}
+    --vdb=${DB} \
+    --header-type=${DUMMY_HEADER} \
+    --batch-number=${BATCH} \
     --chromosome=${CHROM}

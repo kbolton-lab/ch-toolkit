@@ -36,4 +36,6 @@ def import_pon_pileup(variant_duckdb, pon_pileup, batch_number, debug, clobber):
     import chip.vdbtools.importers.variants as variants
     variants.import_pon_pileup(variant_duckdb, pon_pileup, batch_number, debug, clobber)
 
-#venv_ic/bin/chip-variant-db import-vcf --caller mutect --input-vcf data/external/washu-cad-1/H_VL-MI-00052-AB43684226/mutect.H_VL-MI-00052-AB43684226.vcf.gz -i mutect.test_old.db -f -b 1 --vdb variants.db --sdb samples.db
+def import_vep(variant_db, annotation_db, vep, batch_number, debug, clobber):
+    import chip.vdbtools.importers.annotations as annotate
+    annotate.import_vep(variant_db, annotation_db, vep, batch_number, debug, clobber)

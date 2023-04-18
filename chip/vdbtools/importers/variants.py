@@ -295,8 +295,8 @@ def ingest_variant_batch_(db_path, variant_db, batch_number, debug, clobber):
     log.logit(f"Ingesting variants from batch: {batch_number} into {variant_db}", color="green")
     connection = db.duckdb_connect_rw(variant_db, clobber)
     setup_variants_table(connection)
-    merge_variants_tables(db_path, connection, batch_number, debug)
     connection.execute("ALTER TABLE variants ADD COLUMN IF NOT EXISTS variant_id BIGINT")
+    merge_variants_tables(db_path, connection, batch_number, debug)
     connection.execute("UPDATE variants SET variant_id = ROWID")
     create_indexes(connection)
     connection.close()
@@ -309,11 +309,27 @@ def import_sample_variants(input_vcf, duck_db, batch_number, debug, clobber):
     setup_variants_table(connection)
     counts, df = vcf.vcf_to_pd(input_vcf, "variants", batch_number, debug)
     vcf.duckdb_load_df_file(connection, df, "variants")
+    connection.execute("ALTER TABLE variants ADD COLUMN IF NOT EXISTS variant_id BIGINT")
     create_indexes(connection)
     connection.close()
     log.logit(f"Finished registering variants")
     log.logit(f"Variants Processed - Total: {counts}", color="green")
     log.logit(f"All Done!", color="green")
+
+def insert_variant_id(df, connection, debug):
+    log.logit(f"Inserting variant_id for all variants")
+    sql = f"""
+            SELECT variant_id, key
+            FROM variants v
+            WHERE v.key IN (
+                SELECT key
+                FROM df
+            )
+    """
+    v = connection.execute(sql).df()
+    df = v.merge(df, on='key', how='left')
+    df = df.drop('key', axis=1)
+    return df
 
 def get_variants_from_table(connection, batch_number, chromosome):
     if chromosome != None:
@@ -321,7 +337,7 @@ def get_variants_from_table(connection, batch_number, chromosome):
         sql = f"SELECT variant_id, chrom, pos, ref, alt FROM variants WHERE batch = {batch_number} AND chrom = \'{chromosome}\'"
     else:
         log.logit(f"Grabbing variants from batch: {batch_number} from the database")
-        sql = f"SELECT ROWID, chrom, pos, ref, alt FROM variants WHERE batch = {batch_number}"
+        sql = f"SELECT variant_id, chrom, pos, ref, alt FROM variants WHERE batch = {batch_number}"
     return connection.sql(sql)
 
 def dump_variant_batch(variant_db, header, batch_number, chromosome, debug):
@@ -332,7 +348,7 @@ def dump_variant_batch(variant_db, header, batch_number, chromosome, debug):
     connection = db.duckdb_connect(variant_db)
     variants = get_variants_from_table(connection, batch_number, chromosome)
     #vcf.write_variants_to_vcf(variants, header, batch_number, chromosome, debug)
-    vcf.variants_to_vcf(variants, header, batch_number, debug)
+    vcf.variants_to_vcf(variants, header, batch_number, chromosome, debug)
     connection.close()
     log.logit(f"Finished dumping variants into VCF file")
     log.logit(f"All Done!", color="green")

@@ -30,7 +30,8 @@ def vcf_to_pd(input_vcf, what_process, batch_number, debug):
     dispatch = {
         'variants'  : variants_to_df,
         'caller'    : caller_to_df,
-        'pileup'    : pileup_to_df
+        'pileup'    : pileup_to_df,
+        'vep'       : vep_to_df
     }
     function = dispatch[what_process]
     return function(input_vcf, batch_number, debug)
@@ -71,6 +72,7 @@ def pileup_to_df(input_vcf, batch_number, debug):
                                               4: "alt",
                                               7: "info"})
     log.logit(f"Finished reading in the pileup VCF")
+    log.logit(f"Formatting the dataframe...")
     res[['PoN_RefDepth','PoN_AltDepth']] = res['info'].str.split(";", expand=True)
     res['PoN_RefDepth'] = res['PoN_RefDepth'].str.split("=").str[1]
     res['PoN_AltDepth'] = res['PoN_AltDepth'].str.split("=").str[1]
@@ -81,7 +83,49 @@ def pileup_to_df(input_vcf, batch_number, debug):
     res['end'] = None
     res['key'] = res['chrom'] + ':' + res['pos'].astype(str) + ':' + res['ref'] + ':' + res['alt']
     res = res[['chrom', 'pos', 'ref', 'alt', 'snp', 'qc_pass', 'batch', 'start', 'end', 'PoN_RefDepth', 'PoN_AltDepth', 'key']]
+    log.logit(f"Finished preparing the dataframe...")
     total = len(res)
+    return total, res
+
+def vep_to_df(input_vcf, batch_number, debug):
+    log.logit(f"Reading in the VEP VCF...")
+    window = 5_000_000
+    all_res = []
+    CSQ_string = None
+    count = 0
+    from itertools import islice
+    with gzip.open(input_vcf, 'rt') as f, indent(4, quote=' >'):
+        while True:
+            nextLines = list(islice(f, window))
+            if not CSQ_string:
+                CSQ_string = [l.split(':')[1].strip()[:-2] for l in nextLines if l.startswith('##INFO=<ID=CSQ')][0]
+            nextLines = [l for l in nextLines if not l.startswith('#')]
+            if not nextLines:
+                break
+            res = pd.read_csv(io.StringIO(''.join(nextLines)),
+                    sep='\t',
+                    header=None).rename(columns={0: "chrom",
+                                                      1: "pos",
+                                                      3: "ref",
+                                                      4: "alt",
+                                                      7: "info"})[['chrom', 'pos', 'ref', 'alt', 'info']]
+            res['key'] = res['chrom'] + ':' + res['pos'].astype(str) + ':' + res['ref'] + ':' + res['alt']
+            res['CSQ'] = res['info'].apply(lambda x: ''.join([tag.split("=")[1] for tag in x.split(';') if 'CSQ' in tag]))
+            log.logit(f"Formatting the CSQ from VEP...")
+            df = pd.read_csv(io.StringIO('\n'.join(res['CSQ'].values)), sep='|', header=None, low_memory=False)#, dtype=str)
+            df.columns = CSQ_string.split('|')
+            log.logit(f"Finished formatting the CSQ!")
+            res = res.drop(['chrom', 'pos', 'ref', 'alt'], axis=1, inplace=True)
+            res = pd.concat([res, df], axis=1)
+            all_res.append(res)
+            count += res.shape[0]
+            log.logit(f"{count}")
+    all_res = pd.concat(all_res, ignore_index=True)
+    total = len(all_res)
+    log.logit(f"Finished reading in the VEP VCF: {total} variants.")
+    #res = pd.concat([res.drop(['info', 'CSQ'], axis=1), splitByChr(res, CSQ_string, debug)], axis=1)
+    res['batch'] = batch_number
+
     return total, res
 
 def getFields(fields):
@@ -102,24 +146,18 @@ def getFields(fields):
     fields = {field[0]:field[2] for field in fields}
     return fields
 
-# Input: info_tags row     [['AS_FilterStatus', 'weak_evidence,map_qual']
-#                          ['AS_SB_TABLE', '7,13|1,2'] ... etc ]
-# Output: list of values   ['weak_evidence,map_qual', '7,13|1,2', None, None, ... etc ]
-def splitInfor(x, fields):
-    x = [y.split('=') for y in x.split(';')]
-    res = {}
-    for kv in x:
-        if len(kv) == 2:
-            res[kv[0]] = kv[1]
-        else:
-            res[kv[0]] = True
-    res = [fields[field](res[field]) if field in res else None for field in fields]
-    return res
+# def splitInfor(x, columnType):
+#     res = {k: columnType[k](v) for k, v in [y.split('=') if '=' in y else [y, True] for y in x.split(';')]}
+#     return [res[col] if col in res else None for col in columnType]
+
+def splitInfor(info_tags, fields):
+    x = [tag.split('=') if '=' in tag else [tag, True] for tag in info_tags.split(';')] # Splits the Tags into Key = Value or Flag = True
+    res = {k: fields[k](v) for k, v in x}                                               # Converts the Value into the correct Type (via Fields Mapping)
+    return [res[field] if field in res else None for field in fields]                   # For each "info_tag/key" (that should be here), assign it the value to the column or else None
 
 def combineAndSplit(format, sample, fields):
-    res = {format.split(':')[field]: sample.split(':')[field] for field in range(len(format.split(':')))}
-    res = [fields[field](res[field]) if field in res else None for field in fields]
-    return res
+    res = {format.split(':')[field]: sample.split(':')[field] for field in range(len(format.split(':')))}   # For each Format Flag, get the dictionary pairing e.g. GT: '0/1'
+    return [fields[field](res[field]) if field in res else None for field in fields]                        # For each "format_tag/key", assign it the value after mapping it to the correct type
 
 def caller_to_df(input_vcf, batch_number, debug):
     log.logit(f"Reading in the VCF...")
@@ -187,71 +225,19 @@ def variants_to_vcf(duckdb_variants, header_type, batch_number, chromosome, debu
     reader.close()
     log.logit(f"Preparing to write the variants to the VCF: {filename}")
     log.logit(f"Starting to sort variants...")
-    variants = duckdb_variants.df().sort_values(by=['chrom', 'pos'], ascending = True)
-    variants['ROWID']
-    variants['qual'] = "."
-    variants['filter'] = "PASS"
-    variants['info'] = "."
-    variants['format'] = "GT"
-    variants['sample'] = "0/1"
-    variants = variants[['chrom', 'pos', 'ROWID', 'ref', 'alt', 'qual', 'filter', 'info', 'format']]
-    total = len(variants.index)
+    df = duckdb_variants.df().sort_values(by=['chrom', 'pos'], ascending = True)
+    df['qual'] = "."
+    df['filter'] = "PASS"
+    df['info'] = "."
+    df['format'] = "GT"
+    df['sample'] = "0/1"
+    df = df[['chrom', 'pos', 'variant_id', 'ref', 'alt', 'qual', 'filter', 'info', 'format', 'sample']]
+    total = len(df)
     with open(filename, 'w') as writer:
         writer.write(header)
     log.logit(f"Writing to VCF...")
-    variants.to_csv(filename, sep="\t", mode='a', index=False, header=False)
+    df.to_csv(filename, sep="\t", mode='a', index=False, header=False)
     log.logit(f"Finished writing {total} variants to the VCF: {filename}")
-    log.logit(f"Compressing and indexing the VCF: {filename}")
-    pysam.tabix_compress(filename, filename + '.gz', force = True)
-    os.unlink(filename)
-    pysam.tabix_index(filename + '.gz', preset="vcf", force = True)
-
-# DEPRECATED
-def write_variants_to_vcf(duckdb_variants, header_type, batch_number, chromosome, debug):
-    reader = vcfpy.Reader.from_path(load_simple_header(header_type))
-    header = reader.header
-    #header = vcfpy.Header(samples = str(batch_number))
-    #meta_line = vcfpy.MetaHeaderLine('fileformat', '', {'META': 'VCFv4.3'})
-    #header.add_line(meta_line)
-    # Add the fileformat meta header line
-    #header.add_line(vcfpy.MetaHeaderLine('fileformat', None, {'META': 'VCFv4.3'}))
-
-    #info_field = vcfpy.OrderedDict([('ID', 'FAKE'), ('Number', '1'), ('Type', 'String'), ('Description', 'Dummy Value')])
-    #header.add_info_line(vcfpy.OrderedDict(info_field))
-    #format_field = vcfpy.OrderedDict([('ID', 'GT'), ('Number', '1'), ('Type', 'String'), ('Description', 'Genotype')])
-    #header.add_format_line(vcfpy.OrderedDict(format_field))
-    header.samples = vcfpy.SamplesInfos(str(batch_number))
-    if chromosome == None:
-        filename = f"batch-" + str(batch_number) + ".vcf"
-    else:
-        filename = chromosome + '.vcf'
-    writer = vcfpy.Writer.from_path(filename, header)
-    log.logit(f"Preparing to write the variants to the VCF: {filename}")
-    with indent(4, quote=' >'):
-        log.logit(f"Starting to sort variants...")
-        variants = sorted(duckdb_variants.fetchall(), key=lambda row: (row[1], row[2]))
-        total = len(variants)
-        log.logit(f"Finished sorting {total} variants")
-        log.logit(f"Writing to VCF...")
-        for i, variant in enumerate(variants):
-            record = vcfpy.Record(
-                CHROM = variant[1],
-                POS = variant[2],
-                ID = [str(variant[0])],
-                REF = variant[3],
-                ALT = [vcfpy.Substitution(type_ = "", value = variant[4])],
-                QUAL = ".",
-                FILTER = ["PASS"],
-                INFO = {"FAKE" : "."},
-                FORMAT = ["GT"],
-                calls = [vcfpy.Call(sample = str(batch_number), data = {"GT" : "0/1"})]
-            )
-            if debug: log.logit(str(record))
-            writer.write_record(record)
-            if i % 1_000_000 == 0 and i != 0:
-                log.logit(f"{i} variants written to: {filename}")
-    log.logit(f"Finished writing {total} variants to the VCF: {filename}")
-    writer.close()
     log.logit(f"Compressing and indexing the VCF: {filename}")
     pysam.tabix_compress(filename, filename + '.gz', force = True)
     os.unlink(filename)

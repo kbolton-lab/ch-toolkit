@@ -33,8 +33,8 @@ i=1
 for chrom in ${CHROMS[@]}; do
     job_name="VEP.chr${chrom}.vcf.gz)"
     logfile=${ROOT_LOG_DIR}/VEP.chr${chrom}.%J.log
-    vcf=/storage1/fs1/bolton/Active/Projects/chip-toolkit/data/derived/3-dump-variants/chr${chrom}.vcf.gz
-    outfile=chr${chrom}_VEP_annotated.vcf
+    vcf=/storage1/fs1/bolton/Active/Projects/chip-toolkit/data/derived/3.1-dump-variants/chr${chrom}.vcf.gz
+    outfile=chr${chrom}_VEP_annotated.tsv
     log "[ ${i} ] Processing chromosome: ${chrom}"
     log "VCF File: ${vcf}"
     log "Log Directory: ${ROOT_LOG_DIR}"
@@ -49,35 +49,20 @@ for chrom in ${CHROMS[@]}; do
         -a "${DOCKER_IMAGE}" \
         -o ${logfile} \
         /usr/bin/perl -I /opt/lib/perl/VEP/Plugins /usr/bin/variant_effect_predictor.pl \
-            --format vcf \
-            --vcf \
-            --fork 4 \
-            --terms SO \
-            --transcript_version \
-            --offline \
-            --cache \
-            --symbol \
-            -o ${outfile} \
-            -i ${vcf} \
+            --fork 4 -i ${vcf} --tab -o ${outfile} \
+            --offline --cache --buffer_size 1000 \
+            --symbol --transcript_version --assembly GRCh38 --cache_version 104 --species homo_sapiens --merged --use_given_ref \
             --synonyms /storage1/fs1/bga/Active/gmsroot/gc2560/core/model_data/2887491634/build50f99e75d14340ffb5b7d21b03887637/chromAlias.ensembl.txt \
-            --sift p \
-            --polyphen p \
-            --flag_pick \
+            --pick --pick_order canonical,rank,mane,ccds,appris,tsl,biotype,length \
             --dir /storage1/fs1/bolton/Active/Projects/mocha/UKBB/ukbb_calls/pvcf/vep_zip \
             --fasta ${HG38_REF_DH} \
-            --plugin Frameshift \
-            --plugin Wildtype \
+            --af_gnomad \
+            --plugin Frameshift --plugin Wildtype \
             --plugin SpliceAI,snv=/storage1/fs1/bolton/Active/Protected/Data/hg38/vcf/spliceai_scores.raw.snv.hg38.vcf.gz,indel=/storage1/fs1/bolton/Active/Protected/Data/hg38/vcf/spliceai_scores.raw.indel.hg38.vcf.gz \
             --everything \
-            --assembly GRCh38 \
-            --cache_version 104 \
-            --species homo_sapiens \
-            --pick_order canonical,rank,mane,ccds,appris,tsl,biotype,length \
-            --merged \
-            --buffer_size 1000 \
-            --af_gnomad \
             --check_existing --custom /storage1/fs1/bga/Active/gmsroot/gc2560/core/model_data/genome-db-ensembl-gnomad/2dd4b53431674786b760adad60a29273/fixed_b38_exome.vcf.gz,gnomADe,vcf,exact,1,AF,AF_AFR,AF_AMR,AF_ASJ,AF_EAS,AF_FIN,AF_NFE,AF_OTH,AF_SAS \
             --check_existing --custom /storage1/fs1/bga/Active/gmsroot/gc2560/core/custom_clinvar_vcf/v20181028/custom.vcf.gz,clinvar,vcf,exact,1,CLINSIGN,PHENOTYPE,SCORE,RCVACC,TESTEDINGTR,PHENOTYPELIST,NUMSUBMIT,GUIDELINES \
-            --check_existing --custom /storage1/fs1/bolton/Active/Protected/Data/hg38/vcf/gnomad.genomes.r3.0.sites.full_trimmed_info.af_only.vcf.gz,gnomADg,vcf,exact,1,AF,AF_ami,AF_oth,AF_afr,AF_sas,AF_asj,AF_fin,AF_amr,AF_nfe,AF_eas
+            --check_existing --custom /storage1/fs1/bolton/Active/Protected/Data/hg38/vcf/gnomad.genomes.r3.0.sites.full_trimmed_info.af_only.vcf.gz,gnomADg,vcf,exact,1,AF,AF_ami,AF_oth,AF_afr,AF_sas,AF_asj,AF_fin,AF_amr,AF_nfe,AF_eas \
+            --force_overwrite --no_stats
     ((i += 1))
 done
