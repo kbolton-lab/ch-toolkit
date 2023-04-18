@@ -87,8 +87,3 @@ for vcf in ${VARDICT_VCFS[@]}; do
     set +o xtrace;
       ((i += 1))
 done
-
-
-bsub -J H_VL-MI-00192-NA0002318578.vardict.batch.1.1 -M 16GB -R 'rusage[mem=16GB, tmp=30] select[mem>32GB && tmp>30] span[hosts=1]' -G compute-bolton -g /chani/multi -q general -a 'docker(indraniel/bolton-db-toolkit:v1)' -o /scratch1/fs1/bolton/chani/chip-toolkit/register-sample-variants/vardict/H_VL-MI-00192-NA0002318578/%J.log /bin/bash /storage1/fs1/bolton/Active/Projects/chip-toolkit/scripts/register-sample-variants.sh /storage1/fs1/bolton/Active/Projects/chip-toolkit/data/external/washu-cad-1/H_VL-MI-00192-NA0002318578/vardict.H_VL-MI-00192-NA0002318578.vcf.gz 1 vardict.H_VL-MI-00192-NA0002318578.db
-
-bsub -J H_VL-MI-00142-NA0002318567.vardict.batch.1.1 -M 16GB -R 'rusage[mem=16GB, tmp=30] select[mem>32GB && tmp>30] span[hosts=1]' -G compute-bolton -g /chani/multi -q general -a 'docker(indraniel/bolton-db-toolkit:v1)' -o /scratch1/fs1/bolton/chani/chip-toolkit/register-sample-variants/vardict/H_VL-MI-00142-NA0002318567/%J.log /bin/bash /storage1/fs1/bolton/Active/Projects/chip-toolkit/scripts/register-sample-variants.sh /storage1/fs1/bolton/Active/Projects/chip-toolkit/data/external/washu-cad-1/H_VL-MI-00142-NA0002318567/vardict.H_VL-MI-00142-NA0002318567.vcf.gz 1 vardict.H_VL-MI-00142-NA0002318567.db

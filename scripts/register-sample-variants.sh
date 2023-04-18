@@ -11,8 +11,6 @@ DB=$3
 VIRTUALENV=${SCRIPT_DIR}/../venv_ic
 BASE_CMD=${VIRTUALENV}/bin/chip-variant-db
 
-# Redis
-
 ${BASE_CMD} register-sample-variants \
     --input-vcf=${IN_VCF} \
     --batch-number=${BATCH} \

@@ -20,9 +20,6 @@ CREATE TABLE IF NOT EXISTS variants
     alt                    varchar(255) NOT NULL,
     pon_refdepth           integer,
     pon_altdepth           integer,
-    pon_2at2_percent       boolean CHECK (pon_2at2_percent in (0,1)),
-    pon_nat2_percent       integer,
-    pon_max_vaf            decimal(10,5),
     vep                    varchar(10000),
     qc_pass                boolean CHECK (qc_pass in (0,1)),
     UNIQUE( chrom_id, pos, ref, alt )
@@ -172,6 +169,9 @@ CREATE TABLE IF NOT EXISTS mutect
     format_pl                           integer,        /* G - Genotype */
     format_ps                           integer,
     format_sb                           varchar(20),    /* e.g. 14922,9228,61,28 */
+    pon_2at2_percent                    boolean CHECK (pon_2at2_percent in (0,1)),
+    pon_nat2_percent                    integer,
+    pon_max_vaf                         decimal(10,5),
     fisher_p_value                      decimal(10,5), /* indicates that the field should be used to store a value up to ten digits in length, with up to five digits before the decimal point and up to five digits after the decimal point. */
     info_old_multiallelic               varchar(100),  /* If this variant was multiallelic, saves original encoding */
     PRIMARY KEY( sample_id, variant_id )
@@ -234,6 +234,9 @@ CREATE TABLE IF NOT EXISTS vardict
     format_alt_rd           integer,
     format_ref_ald          integer,
     format_alt_ald          integer,
+    pon_2at2_percent        boolean CHECK (pon_2at2_percent in (0,1)),
+    pon_nat2_percent        integer,
+    pon_max_vaf             decimal(10,5),
     fisher_p_value          decimal(10,5),
     info_old_multiallelic   varchar(100),  /* If this variant was multiallelic, saves original encoding */
     PRIMARY KEY( sample_id, variant_id )

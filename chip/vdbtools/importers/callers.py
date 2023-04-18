@@ -4,6 +4,7 @@ import duckdb
 import pandas as pd
 
 import chip.vdbtools.importers.vcf as vcf
+import chip.vdbtools.importers.variants as variants
 import chip.utils.logger as log
 import chip.utils.database as db
 import chip.utils.fisher_exact_test as fisher_test
@@ -73,6 +74,9 @@ def ensure_mutect_tbl(connection):
             format_ref_rev                      integer,
             format_alt_fwd                      integer,
             format_alt_rev                      integer,
+            pon_2at2_percent                    boolean,
+            pon_nat2_percent                    integer,
+            pon_max_vaf                         decimal(10,5),
             fisher_p_value                      decimal(22,20),
             PRIMARY KEY( sample_id, variant_id )
         )
@@ -147,6 +151,9 @@ def ensure_vardict_tbl(connection):
             format_ref_rev          integer,
             format_alt_fwd          integer,
             format_alt_rev          integer,
+            pon_2at2_percent        boolean,
+            pon_nat2_percent        integer,
+            pon_max_vaf             decimal(10,5),
             fisher_p_value          decimal(22,20),
             PRIMARY KEY( sample_id, variant_id )
         )
@@ -185,25 +192,14 @@ def setup_caller_tbl(connection, caller):
     drop_indexes(connection)
     return connection
 
-def insert_variant_id(df, connection, debug):
-    sql = f"""
-            SELECT variant_id, key
-            FROM variants v
-            WHERE v.key IN (
-                SELECT key
-                FROM df
-            )
-    """
-    v = connection.execute(sql).df()
-    df = v.merge(df, on='key', how='left')
-    df = df.drop('key', axis=1)
-    return df
-
 def process_mutect(df, variant_connection, debug):
     log.logit(f"Formatting Mutect Dataframe...")
     df['version'] = '2.2'
     df = df.drop(columns=['CHROM', 'POS', 'REF', 'ALT', 'ID', 'QUAL'])
-    df = df.rename({'FILTER': 'mutect_filter'}, axis=1)
+    df = df.rename({'FILTER': 'mutect_filter',
+                    'info_pon_2at2_percent':'pon_2at2_percent',
+                    'info_pon_nat2_percent':'pon_nat2_percent',
+                    'info_pon_max_vaf':'pon_max_vaf'}, axis=1)
     df.loc[df['info_as_filterstatus'].isnull(), 'info_as_filterstatus'] = 'Multiallelic'
     df["info_as_filterstatus"] = df["info_as_filterstatus"].apply(lambda x: [x])
     df.loc[df['info_str'].isnull(), 'info_str'] = False
@@ -217,8 +213,8 @@ def process_mutect(df, variant_connection, debug):
     df[['format_ref_fwd', 'format_ref_rev', 'format_alt_fwd', 'format_alt_rev']] = df['format_sb'].str.split(',', expand=True)
     df['fisher_p_value'] = None
     log.logit(f"Adding Variant IDs to the Mutect Variants")
-    df = insert_variant_id(df, variant_connection, debug)
-    df = df[['sample_id', 'variant_id', 'version', 'mutect_filter', 'info_as_filterstatus', 'info_as_sb_table', 'info_dp', 'info_ecnt', 'info_mbq_ref', 'info_mbq_alt', 'info_mfrl_ref', 'info_mfrl_alt', 'info_mmq_ref', 'info_mmq_alt', 'info_mpos', 'info_popaf', 'info_roq', 'info_rpa_ref', 'info_rpa_alt', 'info_ru', 'info_str', 'info_strq', 'info_tlod', 'format_af', 'format_dp', 'format_ref_count', 'format_alt_count', 'format_ref_f1r2', 'format_alt_f1r2', 'format_ref_f2r1', 'format_alt_f2r1', 'format_gt', 'format_ref_fwd', 'format_ref_rev', 'format_alt_fwd', 'format_alt_rev', 'fisher_p_value']]
+    df = variants.insert_variant_id(df, variant_connection, debug)
+    df = df[['sample_id', 'variant_id', 'version', 'mutect_filter', 'info_as_filterstatus', 'info_as_sb_table', 'info_dp', 'info_ecnt', 'info_mbq_ref', 'info_mbq_alt', 'info_mfrl_ref', 'info_mfrl_alt', 'info_mmq_ref', 'info_mmq_alt', 'info_mpos', 'info_popaf', 'info_roq', 'info_rpa_ref', 'info_rpa_alt', 'info_ru', 'info_str', 'info_strq', 'info_tlod', 'format_af', 'format_dp', 'format_ref_count', 'format_alt_count', 'format_ref_f1r2', 'format_alt_f1r2', 'format_ref_f2r1', 'format_alt_f2r1', 'format_gt', 'format_ref_fwd', 'format_ref_rev', 'format_alt_fwd', 'format_alt_rev', 'pon_2at2_percent', 'pon_nat2_percent', 'pon_max_vaf', 'fisher_p_value']]
     return df
 
 def insert_mutect_caller(db_path, input_vcf, variant_db, sample_db, batch_number, clobber, debug):
@@ -245,14 +241,17 @@ def process_vardict(df, variant_connection, debug):
     log.logit(f"Formatting Vardict Dataframe...")
     df['version'] = 'v1.8.2'
     df = df.drop(columns=['CHROM', 'POS', 'REF', 'ALT', 'ID', 'QUAL'])
-    df = df.rename({'FILTER': 'vardict_filter'}, axis=1)
+    df = df.rename({'FILTER': 'vardict_filter',
+                    'info_pon_2at2_percent':'pon_2at2_percent',
+                    'info_pon_nat2_percent':'pon_nat2_percent',
+                    'info_pon_max_vaf':'pon_max_vaf'}, axis=1)
     df[['format_ref_count', 'format_alt_count']] = df['format_ad'].str.split(',', expand=True)
     df[['format_ref_fwd', 'format_ref_rev']] = df['format_rd'].str.split(',', expand=True)
     df[['format_alt_fwd', 'format_alt_rev']] = df['format_ald'].str.split(',', expand=True)
     df['fisher_p_value'] = None
     log.logit(f"Adding Variant IDs to the Vardict Variants")
-    df = insert_variant_id(df, variant_connection, debug)
-    df = df[['sample_id', 'variant_id', 'version', 'vardict_filter', 'info_type', 'info_dp', 'info_vd', 'info_af', 'info_bias', 'info_refbias', 'info_varbias', 'info_pmean', 'info_pstd', 'info_qual', 'info_qstd', 'info_sbf', 'info_oddratio', 'info_mq', 'info_sn', 'info_hiaf', 'info_adjaf', 'info_shift3', 'info_msi', 'info_msilen', 'info_nm', 'info_lseq', 'info_rseq', 'info_hicnt', 'info_hicov', 'info_splitread', 'info_spanpair', 'info_duprate', 'format_ref_count', 'format_alt_count', 'format_gt', 'format_dp', 'format_vd', 'format_af', 'format_ref_fwd', 'format_ref_rev', 'format_alt_fwd', 'format_alt_rev', 'fisher_p_value']]
+    df = variants.insert_variant_id(df, variant_connection, debug)
+    df = df[['sample_id', 'variant_id', 'version', 'vardict_filter', 'info_type', 'info_dp', 'info_vd', 'info_af', 'info_bias', 'info_refbias', 'info_varbias', 'info_pmean', 'info_pstd', 'info_qual', 'info_qstd', 'info_sbf', 'info_oddratio', 'info_mq', 'info_sn', 'info_hiaf', 'info_adjaf', 'info_shift3', 'info_msi', 'info_msilen', 'info_nm', 'info_lseq', 'info_rseq', 'info_hicnt', 'info_hicov', 'info_splitread', 'info_spanpair', 'info_duprate', 'format_ref_count', 'format_alt_count', 'format_gt', 'format_dp', 'format_vd', 'format_af', 'format_ref_fwd', 'format_ref_rev', 'format_alt_fwd', 'format_alt_rev', 'pon_2at2_percent', 'pon_nat2_percent', 'pon_max_vaf', 'fisher_p_value']]
     return df
 
 def insert_vardict_caller(db_path, input_vcf, variant_db, sample_db, batch_number, clobber, debug):
@@ -280,7 +279,6 @@ def annotate_fisher_test(variant_db, caller_db, caller, batch_number, debug):
     caller = "mutect" if caller.lower() == "mutect" else "vardict"
     caller_connection = db.duckdb_connect_rw(caller_db, False)
     log.logit(f"Finding all variants within {caller_db} that does not have the fisher's exact test p-value calcualted...")
-    import chip.vdbtools.importers.variants as variants
     caller_connection.execute(f"ATTACH '{variant_db}' as temp_variants")
     sql = f'''
         SELECT c.variant_id, c.sample_id, v.PoN_RefDepth, v.PoN_AltDepth, c.format_ref_fwd, c.format_ref_rev, c.format_alt_fwd, c.format_alt_rev,
@@ -289,7 +287,7 @@ def annotate_fisher_test(variant_db, caller_db, caller, batch_number, debug):
         WHERE c.fisher_p_value is NULL AND PoN_RefDepth is NOT NULL AND PoN_AltDepth is NOT NULL
     '''
     df = caller_connection.execute(sql).df()
-    length = len(df.index)
+    length = len(df)
     log.logit(f"There were {length} variants without fisher test p-value within {caller_db}")
     log.logit(f"Calculating Fisher Exact Test for all variants inside {caller_db}")
     df = fisher_test.pvalue_df(df)

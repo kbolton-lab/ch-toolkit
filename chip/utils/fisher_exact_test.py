@@ -15,6 +15,7 @@ def pvalue_variant_sample(variant_id, sample_id, ref_fwd, ref_rev, alt_fwd, alt_
     res = fisher_exact(tbl, alternative='two-sided')
     return res.pvalue, variant_id, sample_id
 
+# Fisher Test using fisher package (much faster)
 def pvalue_df(df):
     df['rd'] = df['format_ref_fwd'] + df['format_ref_rev']
     df['ad'] = df['format_alt_fwd'] + df['format_alt_rev']
