@@ -1,4 +1,4 @@
-import os
+import os, glob
 import vcfpy
 import duckdb
 import pandas as pd
@@ -8,6 +8,7 @@ import chip.vdbtools.importers.variants as variants
 import chip.utils.logger as log
 import chip.utils.database as db
 import chip.utils.fisher_exact_test as fisher_test
+from clint.textui import indent
 
 def ensure_mutect_tbl(connection):
     log.logit("Ensuring or creating the mutect table")
@@ -272,6 +273,25 @@ def insert_vardict_caller(db_path, input_vcf, variant_db, sample_db, batch_numbe
     annotate_fisher_test(variant_db, db_path, "vardict", batch_number, debug)
     log.logit(f"Finished inserting vardict variants")
     log.logit(f"Variants Processed - Total: {counts}", color="green")
+    log.logit(f"All Done!", color="green")
+
+def merge_caller_tables(db_path, connection, batch_number, caller, debug):
+    log.logit(f'Merging Sample Callers')
+    with indent(4, quote=' >'):
+        for i, file in enumerate(glob.glob(db_path + "*.db")):
+            sample_name = os.path.basename(file).split('.')[1]
+            log.logit(f"Merging: {file}")
+            connection.execute(f"ATTACH \'{file}\' as sample_{i}")
+            connection.sql(f"INSERT INTO {caller} SELECT * FROM sample_{i}.{caller}")
+    log.logit(f"Finished merging all tables from: {db_path}")
+
+def ingest_caller_batch(db_path, caller_db, caller, batch_number, debug, clobber):
+    log.logit(f"Ingesting variants from batch: {batch_number} into {caller_db}", color="green")
+    connection = db.duckdb_connect_rw(caller_db, clobber)
+    setup_caller_tbl(connection, caller)
+    merge_caller_tables(db_path, connection, batch_number, caller, debug)
+    connection.close()
+    log.logit(f"Finished ingesting variants")
     log.logit(f"All Done!", color="green")
 
 def annotate_fisher_test(variant_db, caller_db, caller, batch_number, debug):
