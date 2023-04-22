@@ -1,11 +1,24 @@
 import os, io, re
 import pandas as pd
+import duckdb
 
 import chip.vdbtools.importers.vcf as vcf
 import chip.vdbtools.importers.variants as variants
 import chip.utils.logger as log
 import chip.utils.database as db
 from clint.textui import indent
+
+ANNOTATION_FILES="/storage1/fs1/bolton/Active/Protected/Annotation_Files/"
+BOLTON_BICK_VARS="bick.bolton.vars3.txt"
+TRUNCATING="BB.truncating.more.than.1.tsv"
+SEGEMENTAL_DUPLICATIONS="dup.grch38.bed.gz"
+SIMPLE_REPEATS="simpleRepeat.bed"
+REPEAT_MASKER="repeatMaskerJoinedCurrent.bed"
+MUT2_BICK="topmed.n2.mutation.c.p.txt"
+MUT2_KELLY="kelly.n2.mutation.c.p.txt"
+MATCHES2="matches.2.c.p.txt"
+GENE_LIST="oncoKB_CGC_pd_table_disparity_KB_BW.csv"
+ONCO_KB_AVAILABLE_GENE="/home/tran.n/DucTran/UkbbVar/Data/oncoKbCancerGeneList.tsv"
 
 def load_df_file_into_annotation(connection, df, table):
     sql = f"""
@@ -24,6 +37,7 @@ def load_df_file_into_annotation(connection, df, table):
     connection.execute(sql)
     log.logit(f"Finished inserting pandas dataframe into duckdb")
 
+# DEPRECATED
 def splitAndMax(row):
     res = {}
     # For each column, and value check if we need to split. If we do need to split, we need to find the maximum value
@@ -34,7 +48,8 @@ def splitAndMax(row):
     return pd.Series(res)
 
 #chr1:12828529:C:A variant_id: 71547 - For cases like this... we need to do some pre-processing because the original fixed_b38_exome.vcf.gz has duplicates
-def fix_gnomADe(connection, debug):
+# DEPRECATED
+def fix_gnomADe_(connection, debug):
     sql = f"""
             SELECT variant_id, gnomADe_AF, gnomADe_AF_AFR, gnomADe_AF_AMR, gnomADe_AF_ASJ, gnomADe_AF_EAS, gnomADe_AF_FIN, gnomADe_AF_NFE, gnomADe_AF_OTH, gnomADe_AF_SAS
             FROM vep
@@ -70,138 +85,216 @@ def fix_gnomADe(connection, debug):
     """
     connection.execute(sql)
 
+def fix_gnomADe(df, debug):
+    for col in df.filter(regex='^gnomAD[eg]*_.*').columns:
+        if debug: log.logit(f"Fixing: {col}")
+        tmp = df[col].copy()
+        tmp.replace(['-', '.'], None, inplace=True)
+        tmp[~tmp.isnull()] = tmp[~tmp.isnull()].str.split(',', expand=True).replace('.', None).astype(float).max(axis=1)
+        df[col] = tmp
+    return df
+
 def annotateGnomad(df, debug):
-    log.logit(f"Formatting gnomAD Information")
-    df[df.filter(regex="^gnomAD[eg]*_.*").columns] = df[df.filter(regex="^gnomAD[eg]*_.*").columns].replace({"":0, ".":0, "-":0}).astype(float)
+    log.logit(f"Formatting gnomAD Information...")
+    #df[df.filter(regex="^gnomAD[eg]*_.*").columns] = df[df.filter(regex="^gnomAD[eg]*_.*").columns].replace({"":0, ".":0, "-":0}).astype(float)
     df['max_gnomAD_AF_VEP'] = df.filter(regex=("^gnomAD_.*AF")).max(axis=1)
     df['max_gnomADe_AF_VEP'] = df.filter(regex=("^gnomADe_AF.")).max(axis=1)
     df['max_gnomADg_AF_VEP'] = df.filter(regex=("^gnomADg_AF.")).max(axis=1)
     df['max_pop_gnomAD_AF'] = df[['gnomAD_AF', 'gnomADe_AF', 'gnomADg_AF']].max(axis=1)
     return df
 
-def prepareAnnotatePdData(df, debug):
+def prepareAnnotatePdData(df, vars, debug):
+    log.logit(f"Formatting VEP Information...")
     AminoAcids = {"Cys":"C", "Asp":"D", "Ser":"S", "Gln":"Q", "Lys":"K",
                   "Ile":"I", "Pro":"P", "Thr":"T", "Phe":"F", "Asn":"N",
                   "Gly":"G", "His":"H", "Leu":"L", "Arg":"R", "Trp":"W",
                   "Ala":"A", "Val":"V", "Glu":"E", "Tyr":"Y", "Met":"M",
                   "%3D":"=", "=":"="}
+
+    df['AAchange'] = df['HGVSp'].str.extract(r'(.*p\.)(.*)')[1]
+    df.replace({'AAchange': AminoAcids}, inplace=True, regex=True)
+    df['loci_p'] = df["AAchange"].str.extract(r'(.[0-9]+)')
+    df['gene_loci_p'] = df['SYMBOL']+"_"+df['loci_p']
+    df['loci_c'] = df['HGVSc'].str.extract(r'(.*:)(.*)')[1]
+    df['gene_loci_c'] = df['SYMBOL']+"_"+df['loci_c']
+    df['gene_loci'] = df['gene_loci_p']
+    df.loc[df['gene_loci_p'].isnull(),'gene_loci'] = df['gene_loci_c']
+    df['gene_aachange'] = df['SYMBOL']+"_"+df['AAchange']
+    df['gene_cDNAchange'] = df['SYMBOL']+"_"+df['loci_c']
+
+    #BOLTON_BICK_VARS Formatting
+    vars['gene_aachange'] = vars['SYMBOL_VEP']+"_"+vars['AAchange2']
+    vars['gene_cDNAchange'] = vars['SYMBOL_VEP']+"_"+vars['HGVSc_VEP'].str.extract(r'(.*:)(.*)')[1]
+
+    # Sometimes if the PD has too many NULL it cannot figure out the type to cast so it fails. See: https://github.com/duckdb/duckdb/issues/6811
+    #temp_connection.execute("SET GLOBAL pandas_analyze_sample=0")
+    log.logit(f"Merging information from {BOLTON_BICK_VARS}.", color="yellow")
+    with indent(4, quote=' >'):
+        dims = len(df)
+        tmp = df[(df['key'].isin(vars['key'])) | (df['gene_loci'].isin(vars['gene_loci_vep'].dropna()))]
+        variants = len(tmp)
+        if variants > 0:
+            sql = f'''
+                    SELECT l.key, l.gene_loci, r."n.loci.vep", r."source.totals.loci"
+                    FROM tmp l
+                    LEFT JOIN vars r
+                    ON l.key = r.key OR l.gene_loci = r.gene_loci_vep
+            '''
+            log.logit(f"Adding n.loci to {variants} variants.")
+            tmp = duckdb.sql(sql).df()
+            #tmp = temp_connection.execute(sql).df()
+            tmp = tmp[['key', 'gene_loci', 'n.loci.vep', 'source.totals.loci']]
+            tmp.drop_duplicates(inplace=True)
+            df = pd.merge(df, tmp, on=['key', 'gene_loci'], how='left')
+        else:
+            df['n.loci.vep'] = None
+            df['source.totals.loci'] = None
+
+        df['truncating'] = "not"
+        df.loc[df['AAchange'].str.contains("Ter", na=False), 'truncating'] = "truncating"
+        tmp = df[(df['key'].isin(vars['key'])) | (df['gene_loci'].isin(vars['gene_loci_vep'].dropna()))]
+        variants = len(tmp)
+        if variants > 0:
+            sql = f'''
+                    SELECT l.key, l.gene_loci, l.truncating, r."n.loci.truncating.vep", r."source.totals.loci.truncating"
+                    FROM tmp l
+                    LEFT JOIN vars r
+                    ON (l.key = r.key AND l.truncating = r.truncating) OR (l.gene_loci = r.gene_loci_vep AND l.truncating = r.truncating)
+            '''
+            log.logit(f"Adding n.loci.truncating.vep to {variants} variants.")
+            #tmp = temp_connection.execute(sql).df()
+            tmp = duckdb.sql(sql).df()
+            tmp = tmp[['key', 'gene_loci', 'truncating', 'n.loci.truncating.vep', 'source.totals.loci.truncating']]
+            tmp.drop_duplicates(inplace=True)
+            df = pd.merge(df, tmp, on=['key', 'gene_loci', 'truncating'], how='left')
+        else:
+            df['n.loci.truncating.vep'] = None
+            df['source.totals.loci.truncating'] = None
+        df.drop(['truncating'], axis=1, inplace=True)
+
+        tmp = df[(df['key'].isin(vars['key'])) | (df['gene_aachange'].isin(vars['gene_aachange'].dropna()))]
+        variants = len(tmp)
+        if variants > 0:
+            sql = f'''
+                    SELECT l.key, l.gene_aachange, r."n.HGVSp", r."source.totals.p"
+                    FROM tmp l
+                    LEFT JOIN vars r
+                    ON l.key = r.key OR (l.gene_aachange = r.gene_aachange)
+            '''
+            log.logit(f"Adding n.HGVSp to {variants} variants.")
+            #tmp = temp_connection.execute(sql).df()
+            tmp = duckdb.sql(sql).df()
+            tmp = tmp[['key', 'gene_aachange', 'n.HGVSp', 'source.totals.p']]
+            tmp.drop_duplicates(inplace=True)
+            df = pd.merge(df, tmp, on=['key', 'gene_aachange'], how='left')
+        else:
+            df['n.HGVSp'] = None
+            df['source.totals.p'] = None
+
+        tmp = df[(df['key'].isin(vars['key'])) | (df['gene_cDNAchange'].isin(vars['gene_cDNAchange'].dropna()))]
+        variants = len(tmp)
+        if variants > 0:
+            sql = f'''
+                    SELECT l.key, l.gene_cDNAchange, r."n.HGVSc", r."source.totals.c"
+                    FROM tmp l
+                    LEFT JOIN vars r
+                    ON l.key = r.key OR (l.gene_cDNAchange = r.gene_cDNAchange)
+            '''
+            log.logit(f"Adding n.HGVSc to {variants} variants.")
+            #tmp = temp_connection.execute(sql).df()
+            tmp = duckdb.sql(sql).df()
+            tmp = tmp[['key', 'gene_cDNAchange', 'n.HGVSc', 'source.totals.c']]
+            tmp.drop_duplicates(inplace=True)
+            df = pd.merge(df, tmp, on=['key', 'gene_cDNAchange'], how='left')
+        else:
+            df['n.HGVSc'] = None
+            df['source.totals.c'] = None
+
+        #temp_connection.close()
+        #os.unlink(tmp_path)
+        if len(df) != dims: log.logit(f"ERROR: Something went wrong in the join. Dimensions don't match!", color="red")
+        if len(df) == dims: log.logit(f"SUCCESS.", color="green")
+    df.drop(['loci_p', 'loci_c', 'Location'], axis=1, inplace=True)
     return df
-    #import pdb; pdb.set_trace()
-    #df['HGVSp']
-  #
-  # final$AAchange <- gsub("(.*p\\.)(.*)", "\\2", final$HGVSp_VEP)
-  # for (i in 1:length(AminoAcids)) {
-  #   final$AAchange <- gsub(names(AminoAcids)[i], AminoAcids[i], final$AAchange)
-  # }
-  # final$gene_loci_p <- paste(final$SYMBOL_VEP,
-  #   paste0(
-  #     sapply(final$AAchange, function(x) str_split(x, "[0-9]+", n = 2)[[1]][1]),
-  #     as.numeric(str_extract(final$AAchange, "\\d+"))
-  #   ),
-  #   sep = "_"
-  # )
-  # final$gene_loci_c <- paste(final$SYMBOL_VEP,
-  #   gsub(".*:", "", final$HGVSc),
-  #   sep = "_"
-  # )
-  # final$gene_loci_vep <- ifelse(is.na(final$gene_loci_p), final$gene_loci_c, final$gene_loci_p)
-  # final$key <- with(final, paste(CHROM, POS, REF, ALT, sep = ":"))
-  # final$gene_aachange <- with(final, paste(SYMBOL_VEP, AAchange, sep = "_"))
-  # final$gene_cDNAchange <- paste(final$SYMBOL_VEP, gsub(".*:", "", final$HGVSc_VEP), sep = "_")
-  #
-  # ## ch_pd stuff
-  # vars <- supportData[["vars"]]
-  # vars$gene_aachange <- paste(vars$SYMBOL_VEP, vars$AAchange2, sep = "_")
-  # vars$gene_cDNAchange <- paste(vars$SYMBOL_VEP, gsub(".*:", "", vars$HGVSc_VEP), sep = "_")
-  # vars <- vars[vars$key %in% final$key | vars$gene_loci_vep %in% final$gene_loci_vep, ]
-  #
-  # dims <- dim(final)[[1]]
-  # final <- sqldf("SELECT l.*, r.`n.loci.vep`, r.`source.totals.loci`
-  #           FROM `final` as l
-  #           LEFT JOIN `vars` as r
-  #           on l.key = r.key OR l.gene_loci_vep = r.gene_loci_vep")
-  # final <- final[!duplicated(final), ]
-  #
-  # ## make sure aachange exists as in doesn't end with an '_'; example: DNMT3A_ for splice
-  # vars <- vars[!(grepl("_$", vars$gene_aachange) | grepl("_$", vars$gene_cDNAchange)), ]
-  # final <- sqldf("SELECT l.*, r.`n.HGVSp`, r.`source.totals.p`
-  #           FROM `final` as l
-  #           LEFT JOIN `vars` as r
-  #           on l.key = r.key OR (l.gene_aachange = r.gene_aachange)")
-  # final <- final[!duplicated(final), ]
-  # final <- sqldf("SELECT l.*, r.`n.HGVSc`, r.`source.totals.c`
-  #           FROM `final` as l
-  #           LEFT JOIN `vars` as r
-  #           on l.key = r.key OR (l.gene_cDNAchange = r.gene_cDNAchange)")
-  # final <- final[!duplicated(final), ]
-  # paste0("dims match after sqldf: ", dim(final)[[1]] == dims)
-  #
-  # final$Mutect2_PON_2AT2_percent <- tidyr::replace_na(final$Mutect2_PON_2AT2_percent, 0)
-  # final$Vardict_PON_2AT2_percent <- tidyr::replace_na(final$Vardict_PON_2AT2_percent, 0)
 
 def preprocess(df, debug):
     log.logit(f"Performing some preprocessing to prepare for AnnotatePD")
+    vars = pd.read_csv(ANNOTATION_FILES+BOLTON_BICK_VARS, sep='\t')
     df = annotateGnomad(df, debug)
-    df = prepareAnnotatePdData(df, debug)
+    df = prepareAnnotatePdData(df, vars, debug)
     return df
 
-def tsv_to_pd(vep, batch_number, debug):
+def tsv_to_pd(tsv, batch_number, header, debug):
     log.logit(f"Reading in the VEP VCF...")
+    res = pd.read_csv(io.StringIO(''.join(tsv)),
+                        header=None,
+                        sep='\t',
+                        names=header,
+                        low_memory=False).rename(columns={'#Uploaded_variation':'variant_id'})
+    total = len(res)
+    log.logit(f"Finished reading {total} variants in the VEP VCF.")
+    res['batch'] = batch_number
+    return total, res
+
+def insert_vep(vep, annotation_connection, variant_connection, batch_number, debug):
     window = 5_000_000
-    all_res = []
-    header = None
-    count = 0
+    total = 0
     from itertools import islice
     with open(vep, 'rt') as f, indent(4, quote=' >'):
+        header = [l.strip('\n').split('\t') for l in f if l.startswith('#Uploaded_variation')][0]
+        f.seek(0) # Reset the reader to top
         while True:
             nextLines = list(islice(f, window))
-            if not header:
-                header = [l.strip('\n').split('\t') for l in nextLines if l.startswith('#Uploaded_variation')][0]
             nextLines = [l for l in nextLines if not l.startswith('#')]
             if not nextLines:
                 break
-            res = pd.read_csv(io.StringIO(''.join(nextLines)),
-                                header=None,
-                                sep='\t',
-                                names=header,
-                                low_memory=False).rename(columns={'#Uploaded_variation':'variant_id'})
-            all_res.append(res)
-            count += res.shape[0]
-            cur = res.iloc[-1]['Location']
-            log.logit(f"{count} variants loaded. Current: {cur}")
-    all_res = pd.concat(all_res, ignore_index=True)
-    total = len(all_res)
-    log.logit(f"Finished reading in the VEP VCF: {total} variants.")
-    all_res['batch'] = batch_number
-    return total, all_res
+            count, df = tsv_to_pd(nextLines, batch_number, header, debug)
+            total += count
+            cur = df.iloc[-1]['Location']
+            log.logit(f"{total} variants loaded. Current: {cur}")
+            df = fix_gnomADe(df, debug)
+            df = variants.insert_variant_keys(df, variant_connection, debug)
+            df = preprocess(df, debug)
+            if annotation_connection.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='vep'").fetchone():
+                log.logit(f"The VEP table already exists, so we can insert the information directly")
+                load_df_file_into_annotation(annotation_connection, df, "vep")
+            else:
+                log.logit(f"This is the first time the VEP table is being referenced. Creating the Table.")
+                annotation_connection.execute("SET GLOBAL pandas_analyze_sample=0")
+                annotation_connection.sql("CREATE TABLE IF NOT EXISTS vep AS SELECT * FROM df")
+            #fix_gnomADe_(annotation_connection, debug)
+    return total
 
-def import_vep(variant_db, annotation_db, vep, batch_number, debug, clobber):
+def import_vep(annotation_db, variant_db, vep, batch_number, debug, clobber):
         log.logit(f"Adding VEP from batch: {batch_number} into {annotation_db}", color="green")
         annotation_connection = db.duckdb_connect_rw(annotation_db, clobber)
-        extension = os.path.splitext(vep)[1]
-        if extension == ".tsv":
-            counts, df = tsv_to_pd(vep, batch_number, debug)
-        else: # This should be deprecated (it's slower and worse)
-            counts, df = vcf.vcf_to_pd(vep, "vep", batch_number, debug)
-            variant_connection = db.duckdb_connect(variant_db)
-            df = variants.insert_variant_id(df, variant_connection, debug)
-            variant_connection.close()
-        if annotation_connection.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='vep'").fetchone():
-            log.logit(f"The VEP table already exists, so we can insert the information directly")
-            load_df_file_into_annotation(annotation_connection, df, "vep")
-        else:
-            log.logit(f"This is the first time the VEP table is being referenced. Creating the Table.")
-            annotation_connection.sql("CREATE TABLE IF NOT EXISTS vep AS SELECT * FROM df")
+        variant_connection = db.duckdb_connect_ro(variant_db)
+        counts = insert_vep(vep, annotation_connection, variant_connection, batch_number, debug)
         annotation_connection.close()
         log.logit(f"Finished importing VEP information")
         log.logit(f"Variants Processed - Total: {counts}", color="green")
         log.logit(f"All Done!", color="green")
 
-def annotate_pd(annotation_db, batch_number, debug, clobber):
-    log.logit(f"Annotating variants from batch: {batch_number} in {annotation_db}", color="green")
-    annotation_connection = db.duckdb_connect_rw(annotation_db, clobber)
-    fix_gnomADe(annotation_connection, debug)
+def dump_variants_batch(annotation_db, batch_number, debug):
+    log.logit(f"Annotating variants from batch: {batch_number} in {annotation_db} with putative driver information", color="green")
+    annotation_connection = db.duckdb_connect_ro(annotation_db)
     log.logit(f"Grabbing Variants to perform AnnotatePD")
-    df = annotation_connection.execute(f"SELECT * FROM vep WHERE batch = \'{batch_number}\'").df()
-    df = preprocess(df, debug)
-    #annotatePD
+    sql = f'''
+            SELECT variant_id, key, Consequence, SYMBOL, EXON, AAchange, HGVSc, HGVSp, \"n.HGVSc\", \"n.HGVSp\"
+            FROM vep
+            WHERE batch = {batch_number} AND SYMBOL != \'-\' AND Consequence NOT LIKE 'intron_variant%'
+    '''
+    df = annotation_connection.execute(sql).df()
+    df[['CHROM', 'POS', 'REF', 'ALT']] = df['key'].str.split(':', expand=True)
+    df.rename({'variant_id':'SAMPLE',
+               'SYMBOL':'SYMBOL_VEP',
+               'HGVSp':'HGVSp_VEP',
+               'HGVSc':'HGVSc_VEP',
+               'Consequence':'Consequence_VEP',
+               'EXON':'EXON_VEP'}, axis=1, inplace=True)
+    total = len(df)
+    log.logit(f"{total} variants grabbed from {annotation_db} for {batch_number}")
+    annotation_connection.close()
+    df.to_csv(f"batch-{batch_number}-forAnnotatePD.csv", index=False)
+    log.logit(f"Finished dumping variants into CSV file")
+    log.logit(f"All Done!", color="green")

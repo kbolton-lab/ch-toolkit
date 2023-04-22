@@ -24,6 +24,10 @@ def import_vardict(db_path, input_vcf, variant_db, sample_db, batch_number, clob
     import chip.vdbtools.importers.callers as callers
     callers.insert_vardict_caller(db_path, input_vcf, variant_db, sample_db, batch_number, clobber, debug)
 
+def import_caller_batch(db_path, caller_db, caller, batch_number, debug, clobber):
+    import chip.vdbtools.importers.callers as callers
+    callers.ingest_caller_batch(db_path, caller_db, caller, batch_number, debug, clobber)
+
 def import_variant_batch(duckdb_file, redis_host, redis_port, batch_number, chromosome, clobber, work_dir, window_size, debug):
     import chip.vdbtools.importers.variants as variants
     variants.ingest_variant_batch(duckdb_file, redis_host, redis_port, batch_number, chromosome, clobber, work_dir, window_size, debug)
@@ -36,6 +40,6 @@ def import_pon_pileup(variant_duckdb, pon_pileup, batch_number, debug, clobber):
     import chip.vdbtools.importers.variants as variants
     variants.import_pon_pileup(variant_duckdb, pon_pileup, batch_number, debug, clobber)
 
-def import_vep(variant_db, annotation_db, vep, batch_number, debug, clobber):
+def import_vep(annotation_db, variant_db, vep, batch_number, debug, clobber):
     import chip.vdbtools.importers.annotations as annotate
-    annotate.import_vep(variant_db, annotation_db, vep, batch_number, debug, clobber)
+    annotate.import_vep(annotation_db, variant_db, vep, batch_number, debug, clobber)

@@ -331,6 +331,20 @@ def insert_variant_id(df, connection, debug):
     df = df.drop('key', axis=1)
     return df
 
+def insert_variant_keys(df, connection, debug):
+    log.logit(f"Inserting variant key for all variants")
+    sql = f"""
+            SELECT variant_id, key
+            FROM variants v
+            WHERE v.variant_id IN (
+                SELECT variant_id
+                FROM df
+            )
+    """
+    keys = connection.execute(sql).df()
+    df = keys.merge(df, on='variant_id', how='left')
+    return df
+
 def get_variants_from_table(connection, batch_number, chromosome):
     if chromosome != None:
         log.logit(f"Grabbing variants from batch: {batch_number} and chromosome: {chromosome} from the database")
