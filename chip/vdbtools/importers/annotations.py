@@ -126,8 +126,6 @@ def prepareAnnotatePdData(df, vars, debug):
     vars['gene_aachange'] = vars['SYMBOL_VEP']+"_"+vars['AAchange2']
     vars['gene_cDNAchange'] = vars['SYMBOL_VEP']+"_"+vars['HGVSc_VEP'].str.extract(r'(.*:)(.*)')[1]
 
-    # Sometimes if the PD has too many NULL it cannot figure out the type to cast so it fails. See: https://github.com/duckdb/duckdb/issues/6811
-    #temp_connection.execute("SET GLOBAL pandas_analyze_sample=0")
     log.logit(f"Merging information from {BOLTON_BICK_VARS}.", color="yellow")
     with indent(4, quote=' >'):
         dims = len(df)
@@ -142,7 +140,6 @@ def prepareAnnotatePdData(df, vars, debug):
             '''
             log.logit(f"Adding n.loci to {variants} variants.")
             tmp = duckdb.sql(sql).df()
-            #tmp = temp_connection.execute(sql).df()
             tmp = tmp[['key', 'gene_loci', 'n.loci.vep', 'source.totals.loci']]
             tmp.drop_duplicates(inplace=True)
             df = pd.merge(df, tmp, on=['key', 'gene_loci'], how='left')
@@ -162,7 +159,6 @@ def prepareAnnotatePdData(df, vars, debug):
                     ON (l.key = r.key AND l.truncating = r.truncating) OR (l.gene_loci = r.gene_loci_vep AND l.truncating = r.truncating)
             '''
             log.logit(f"Adding n.loci.truncating.vep to {variants} variants.")
-            #tmp = temp_connection.execute(sql).df()
             tmp = duckdb.sql(sql).df()
             tmp = tmp[['key', 'gene_loci', 'truncating', 'n.loci.truncating.vep', 'source.totals.loci.truncating']]
             tmp.drop_duplicates(inplace=True)
@@ -182,7 +178,6 @@ def prepareAnnotatePdData(df, vars, debug):
                     ON l.key = r.key OR (l.gene_aachange = r.gene_aachange)
             '''
             log.logit(f"Adding n.HGVSp to {variants} variants.")
-            #tmp = temp_connection.execute(sql).df()
             tmp = duckdb.sql(sql).df()
             tmp = tmp[['key', 'gene_aachange', 'n.HGVSp', 'source.totals.p']]
             tmp.drop_duplicates(inplace=True)
@@ -201,7 +196,6 @@ def prepareAnnotatePdData(df, vars, debug):
                     ON l.key = r.key OR (l.gene_cDNAchange = r.gene_cDNAchange)
             '''
             log.logit(f"Adding n.HGVSc to {variants} variants.")
-            #tmp = temp_connection.execute(sql).df()
             tmp = duckdb.sql(sql).df()
             tmp = tmp[['key', 'gene_cDNAchange', 'n.HGVSc', 'source.totals.c']]
             tmp.drop_duplicates(inplace=True)
@@ -209,9 +203,6 @@ def prepareAnnotatePdData(df, vars, debug):
         else:
             df['n.HGVSc'] = None
             df['source.totals.c'] = None
-
-        #temp_connection.close()
-        #os.unlink(tmp_path)
         if len(df) != dims: log.logit(f"ERROR: Something went wrong in the join. Dimensions don't match!", color="red")
         if len(df) == dims: log.logit(f"SUCCESS.", color="green")
     df.drop(['loci_p', 'loci_c', 'Location'], axis=1, inplace=True)
@@ -233,6 +224,33 @@ def tsv_to_pd(tsv, batch_number, header, debug):
                         low_memory=False).rename(columns={'#Uploaded_variation':'variant_id'})
     total = len(res)
     log.logit(f"Finished reading {total} variants in the VEP VCF.")
+    res['batch'] = batch_number
+    return total, res
+
+def annotate_pd_to_pd(annotate_pd, batch_number, header, debug):
+    log.logit(f"Reading in the AnnotatePD CSV...")
+    window = 5_000_000
+    all_res = []
+    total = 0
+    from itertools import islice
+    with open(annotate_pd, 'rt') as f, indent(4, quote=' >'):
+        header = f.readline().strip('\n').replace('\"', '').split(',')
+        while True:
+            nextLines = list(islice(f, window))
+            nextLines = [l for l in nextLines]
+            if not nextLines:
+                break
+            res = pd.read_csv(io.StringIO(''.join(nextLines)),
+                                header=None,
+                                names=header,
+                                low_memory=False)
+            res['batch'] = batch_number
+            total += len(res)
+            log.logit(f"{total} variants loaded.")
+            all_res.append(res)
+    all_res = pd.concat(all_res, ignore_index=True)
+    total = len(all_res)
+    log.logit(f"Finished reading in the AnnotatePD CSV: {total} variants.")
     res['batch'] = batch_number
     return total, res
 
@@ -260,6 +278,7 @@ def insert_vep(vep, annotation_connection, variant_connection, batch_number, deb
                 load_df_file_into_annotation(annotation_connection, df, "vep")
             else:
                 log.logit(f"This is the first time the VEP table is being referenced. Creating the Table.")
+                # Sometimes if the PD has too many NULL it cannot figure out the type to cast so it fails. See: https://github.com/duckdb/duckdb/issues/6811
                 annotation_connection.execute("SET GLOBAL pandas_analyze_sample=0")
                 annotation_connection.sql("CREATE TABLE IF NOT EXISTS vep AS SELECT * FROM df")
             #fix_gnomADe_(annotation_connection, debug)
@@ -297,4 +316,26 @@ def dump_variants_batch(annotation_db, batch_number, debug):
     annotation_connection.close()
     df.to_csv(f"batch-{batch_number}-forAnnotatePD.csv", index=False)
     log.logit(f"Finished dumping variants into CSV file")
+    log.logit(f"All Done!", color="green")
+
+def process_annotate_pd(df, debug):
+    df.rename({'SAMPLE':'variant_id'}, axis=1, inplace=True)
+    df.drop(['Consequence_VEP', 'SYMBOL_VEP', 'EXON_VEP', 'AAchange', 'HGVSc_VEP', 'HGVSp_VEP', 'n.HGVSc', 'n.HGVSp', 'CHROM', 'POS', 'REF', 'ALT'], axis=1, inplace=True)
+    return df
+
+def import_annotate_pd(annotation_db, annotate_pd, batch_number, debug):
+    log.logit(f"Adding AnnotatePD Information from batch: {batch_number} into {annotation_db}", color="green")
+    annotation_connection = db.duckdb_connect_rw(annotation_db, False)
+    counts, df = annotate_pd_to_pd(annotate_pd, annotation_connection, batch_number, debug)
+    df = process_annotate_pd(df, debug)
+    if annotation_connection.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='pd'").fetchone():
+        log.logit(f"The AnnotatePD table already exists, so we can insert the information directly")
+        load_df_file_into_annotation(annotation_connection, df, "pd")
+    else:
+        log.logit(f"This is the first time the AnnotatePD table is being referenced. Creating the Table.")
+        # Sometimes if the PD has too many NULL it cannot figure out the type to cast so it fails. See: https://github.com/duckdb/duckdb/issues/6811
+        annotation_connection.execute("SET GLOBAL pandas_analyze_sample=0")
+        annotation_connection.sql("CREATE TABLE IF NOT EXISTS pd AS SELECT * FROM df")
+    log.logit(f"Finished importing AnnotatePD information")
+    log.logit(f"Variants Processed - Total: {counts}", color="green")
     log.logit(f"All Done!", color="green")

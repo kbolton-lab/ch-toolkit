@@ -236,12 +236,13 @@ def dump_variants_for_annotate_pd(annotation_db, batch_number, debug):
 # TODO
 @cli.command('import-annotate-pd', short_help="annotates variants with their pathogenicity")
 @click.option('--adb', 'annotation_db', type=click.Path(exists=True), required=True, help="The duckdb database to store the annotation information")
+@click.option('--pd', '-p', 'annotate_pd', type=click.Path(exists=True), required=True, help="The CSV File produced from AnnotatePD to be imported into the annotation database")
 @click.option('--batch-number', '-b', type=click.INT, required=True, help="The batch number of this variant set")
 @click.option('--debug', '-d', is_flag=True, show_default=True, default=False, required=True, help="Print extra debugging output")
-def import_vep(annotation_db, batch_number, debug):
+def import_annotate_pd(annotation_db, annotate_pd, batch_number, debug):
     """
     Dumps the vep information into an annotation duckdb
     """
     import chip.vdbtools.importer as importer
-    importer.import_annotate_pd(annotation_db, batch_number, debug)
+    importer.import_annotate_pd(annotation_db, annotate_pd, batch_number, debug)
     log.logit(f"---> Successfully annotated variants from batch ({batch_number}) in {annotation_db}", color="green")

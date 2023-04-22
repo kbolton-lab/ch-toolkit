@@ -43,3 +43,7 @@ def import_pon_pileup(variant_duckdb, pon_pileup, batch_number, debug, clobber):
 def import_vep(annotation_db, variant_db, vep, batch_number, debug, clobber):
     import chip.vdbtools.importers.annotations as annotate
     annotate.import_vep(annotation_db, variant_db, vep, batch_number, debug, clobber)
+
+def import_annotate_pd(annotation_db, annotate_pd, batch_number, debug):
+    import chip.vdbtools.importers.annotations as annotate
+    annotate.import_annotate_pd(annotation_db, annotate_pd, batch_number, debug)
