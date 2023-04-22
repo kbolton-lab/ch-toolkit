@@ -62,6 +62,24 @@ def import_vcf(caller, input_vcf, database, variant_db, sample_db, batch_number,
     importer.import_vcf(database, input_vcf, caller, variant_db, sample_db, batch_number, clobber, debug)
     puts(colored.green(f"---> Successfully imported ({input_vcf}) into {database}"))
 
+@cli.command('merge-batch-vcf', short_help="Combines all sample vcfs databases into a single database")
+@click.option('--db-path', '-p', type=click.Path(exists=True), required=True, help="The path to where all the databases for this batch is stored")
+@click.option('--cdb', 'caller_db', type=click.Path(), required=True, help="The variant database to import the batch into")
+@click.option('--caller', 'caller',
+              type=click.Choice(['mutect', 'vardict'], case_sensitive=False),
+              required=True,
+              help="Type of VCF file to import")
+@click.option('--batch-number', '-b', type=click.INT, required=True, help="The batch number of this import set")
+@click.option('--debug', '-d', is_flag=True, show_default=True, default=False, required=True, help="Print extra debugging output")
+@click.option('--clobber', '-f', is_flag=True, show_default=True, default=False, required=True, help="If exists, delete existing duckdb file and then start from scratch")
+def merge_batch_vcf(db_path, caller_db, caller, batch_number, debug, clobber):
+    """
+    Ingest the variants in a batch into main variants database
+    """
+    import chip.vdbtools.importer as importer
+    importer.import_caller_batch(db_path, caller_db, caller, batch_number, debug, clobber)
+    log.logit(f"---> Successfully imported variant batch ({batch_number}) into {caller_db}", color="green")
+
 @cli.command('register-variants', short_help="register the variants in a vcf file into redis")
 @click.option('--input-vcf', '-i', 'input_vcf', type=click.Path(exists=True), required=True,
               help="The VCF to be imported into redis")
@@ -103,7 +121,7 @@ def register_sample_variants(input_vcf, duck_db, batch_number, debug, clobber):
 @click.option('--batch-number', '-b', type=click.INT, required=True, help="The batch number of this import set")
 @click.option('--debug', '-d', is_flag=True, show_default=True, default=False, required=True, help="Print extra debugging output")
 @click.option('--clobber', '-f', is_flag=True, show_default=True, default=False, required=True, help="If exists, delete existing duckdb file and then start from scratch")
-def ingest_batch_variants(db_path, variant_db, batch_number, debug, clobber):
+def merge_batch_variants(db_path, variant_db, batch_number, debug, clobber):
     """
     Ingest the variants in a batch into main variants database
     """
@@ -189,30 +207,41 @@ def calculate_fishers_test(variant_db, caller_db, caller, batch_number, debug):
 
 # TODO
 @cli.command('import-vep', short_help="updates variants inside duckdb with VEP information")
-@click.option('--vdb', 'variant_db', type=click.Path(exists=True), required=True, help="The duckdb database to fetch variant ID from")
 @click.option('--adb', 'annotation_db', type=click.Path(), required=True, help="The duckdb database to store the annotation information")
-@click.option('--vep', '-v', type=click.Path(exists=True), required=True, help="The VEP VCF/TSV to be imported into the annotation database")
+@click.option('--vdb', 'variant_db', type=click.Path(exists=True), required=True, help="The duckdb database to fetch variant key from")
+@click.option('--vep', '-v', type=click.Path(exists=True), required=True, help="The VEP TSV to be imported into the annotation database")
 @click.option('--batch-number', '-b', type=click.INT, required=True, help="The batch number of this variant set")
 @click.option('--debug', '-d', is_flag=True, show_default=True, default=False, required=True, help="Print extra debugging output")
 @click.option('--clobber', '-f', is_flag=True, show_default=True, default=False, required=True, help="If exists, delete existing duckdb file and then start from scratch")
-def import_vep(variant_db, annotation_db, vep, batch_number, debug, clobber):
+def import_vep(annotation_db, variant_db, vep, batch_number, debug, clobber):
     """
     Dumps the vep information into an annotation duckdb
     """
     import chip.vdbtools.importer as importer
-    importer.import_vep(variant_db, annotation_db, vep, batch_number, debug, clobber)
+    importer.import_vep(annotation_db, variant_db, vep, batch_number, debug, clobber)
     log.logit(f"---> Successfully imported VEP from batch ({batch_number}) into {annotation_db}", color="green")
+
+@cli.command('dump-annotations', short_help="dumps all variant annotations inside duckdb into a CSV file")
+@click.option('--adb', 'annotation_db', type=click.Path(exists=True), required=True, help="The duckdb database to dump the variant annotations from")
+@click.option('--batch-number', '-b', type=click.INT, required=True, help="The batch number of this variant set")
+@click.option('--debug', '-d', is_flag=True, show_default=True, default=False, required=True, help="Print extra debugging output")
+def dump_variants_for_annotate_pd(annotation_db, batch_number, debug):
+    """
+    Dumps the variant annotations from duckdb into a CSV file
+    """
+    import chip.vdbtools.dump as dump
+    dump.dump_variants_for_annotate_pd(annotation_db, batch_number, debug)
+    log.logit(f"---> Successfully dumped variant annotations batch ({batch_number}) from {annotation_db}", color="green")
 
 # TODO
 @cli.command('import-annotate-pd', short_help="annotates variants with their pathogenicity")
-@click.option('--adb', 'annotation_db', type=click.Path(), required=True, help="The duckdb database to store the annotation information")
+@click.option('--adb', 'annotation_db', type=click.Path(exists=True), required=True, help="The duckdb database to store the annotation information")
 @click.option('--batch-number', '-b', type=click.INT, required=True, help="The batch number of this variant set")
 @click.option('--debug', '-d', is_flag=True, show_default=True, default=False, required=True, help="Print extra debugging output")
-@click.option('--clobber', '-f', is_flag=True, show_default=True, default=False, required=True, help="If exists, delete existing duckdb file and then start from scratch")
-def import_vep(annotation_db, batch_number, debug, clobber):
+def import_vep(annotation_db, batch_number, debug):
     """
     Dumps the vep information into an annotation duckdb
     """
-    import chip.vdbtools.importers.annotations as annotate
-    annotate.annotate_pd(annotation_db, batch_number, debug, clobber)
+    import chip.vdbtools.importer as importer
+    importer.import_annotate_pd(annotation_db, batch_number, debug)
     log.logit(f"---> Successfully annotated variants from batch ({batch_number}) in {annotation_db}", color="green")
