@@ -276,9 +276,9 @@ def insert_vardict_caller(db_path, input_vcf, variant_db, sample_db, batch_numbe
     log.logit(f"All Done!", color="green")
 
 def merge_caller_tables(db_path, connection, batch_number, caller, debug):
-    log.logit(f'Merging Sample Callers')
+    log.logit(f'Merging Sample Callers from {db_path}')
     with indent(4, quote=' >'):
-        for i, file in enumerate(glob.glob(db_path + "*.db")):
+        for i, file in enumerate(glob.glob(db_path + "/" + "*.db")):
             sample_name = os.path.basename(file).split('.')[1]
             log.logit(f"Merging: {file}")
             connection.execute(f"ATTACH \'{file}\' as sample_{i}")

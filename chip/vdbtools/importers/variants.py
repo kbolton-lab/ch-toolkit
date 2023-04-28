@@ -215,9 +215,9 @@ def bulk_update_pileup(duckdb_connection, entries):
 #     return count
 
 def merge_variants_tables(db_path, connection, batch_number, debug):
-    log.logit(f'Merging Sample Variants')
+    log.logit(f'Merging Sample Variants from {db_path}')
     with indent(4, quote=' >'):
-        for i, file in enumerate(glob.glob(db_path + "*.db")):
+        for i, file in enumerate(glob.glob(db_path + "/" + "*.db")):
             sample_name = os.path.basename(file).split('.')[1]
             log.logit(f"Merging: {file}")
             connection.execute(f"ATTACH \'{file}\' as sample_{i}")
