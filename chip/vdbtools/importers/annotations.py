@@ -10,15 +10,6 @@ from clint.textui import indent
 
 ANNOTATION_FILES="/storage1/fs1/bolton/Active/Protected/Annotation_Files/"
 BOLTON_BICK_VARS="bick.bolton.vars3.txt"
-TRUNCATING="BB.truncating.more.than.1.tsv"
-SEGEMENTAL_DUPLICATIONS="dup.grch38.bed.gz"
-SIMPLE_REPEATS="simpleRepeat.bed"
-REPEAT_MASKER="repeatMaskerJoinedCurrent.bed"
-MUT2_BICK="topmed.n2.mutation.c.p.txt"
-MUT2_KELLY="kelly.n2.mutation.c.p.txt"
-MATCHES2="matches.2.c.p.txt"
-GENE_LIST="oncoKB_CGC_pd_table_disparity_KB_BW.csv"
-ONCO_KB_AVAILABLE_GENE="/home/tran.n/DucTran/UkbbVar/Data/oncoKbCancerGeneList.tsv"
 
 def load_df_file_into_annotation(connection, df, table):
     sql = f"""
@@ -37,54 +28,7 @@ def load_df_file_into_annotation(connection, df, table):
     connection.execute(sql)
     log.logit(f"Finished inserting pandas dataframe into duckdb")
 
-# DEPRECATED
-def splitAndMax(row):
-    res = {}
-    # For each column, and value check if we need to split. If we do need to split, we need to find the maximum value
-    # If not, then just return the float converted value (this eliminates the need for astype(float) earlier)
-    for col, val in row.items():
-        res[col] = max([float(re.sub(r'\.(?!\d)', '0', x)) for x in str(val).split(',')]) if ',' in str(val) else float(val)
-    #res = {col : max([float(re.sub(r'\.(?!\d)', '0', x)) for x in str(val).split(',')]) if ',' in str(val) else float(val) for col, val in row.items()}
-    return pd.Series(res)
-
 #chr1:12828529:C:A variant_id: 71547 - For cases like this... we need to do some pre-processing because the original fixed_b38_exome.vcf.gz has duplicates
-# DEPRECATED
-def fix_gnomADe_(connection, debug):
-    sql = f"""
-            SELECT variant_id, gnomADe_AF, gnomADe_AF_AFR, gnomADe_AF_AMR, gnomADe_AF_ASJ, gnomADe_AF_EAS, gnomADe_AF_FIN, gnomADe_AF_NFE, gnomADe_AF_OTH, gnomADe_AF_SAS
-            FROM vep
-            WHERE gnomADe_AF LIKE '%,%' OR
-                  gnomADe_AF_AFR LIKE '%,%' OR
-                  gnomADe_AF_AMR LIKE '%,%' OR
-                  gnomADe_AF_ASJ LIKE '%,%' OR
-                  gnomADe_AF_EAS LIKE '%,%' OR
-                  gnomADe_AF_FIN LIKE '%,%' OR
-                  gnomADe_AF_NFE LIKE '%,%' OR
-                  gnomADe_AF_OTH LIKE '%,%' OR
-                  gnomADe_AF_SAS LIKE '%,%'
-    """
-    df = connection.execute(sql).df()
-    total = len(df)
-    log.logit(f"There were {total} variants that need to be fixed. Run using debug to see these variants.")
-    if debug: df.to_csv('gnomADe_variants.csv', index=False)
-    res = df.loc[:, df.columns != 'variant_id'].apply(lambda x: splitAndMax(x), axis=1)
-    df = pd.concat([df['variant_id'], res], axis=1)
-    sql = f"""
-            UPDATE vep
-            SET gnomADe_AF = df.gnomADe_AF,
-                gnomADe_AF_AFR = df.gnomADe_AF_AFR,
-                gnomADe_AF_AMR = df.gnomADe_AF_AMR,
-                gnomADe_AF_ASJ = df.gnomADe_AF_ASJ,
-                gnomADe_AF_EAS = df.gnomADe_AF_EAS,
-                gnomADe_AF_FIN = df.gnomADe_AF_FIN,
-                gnomADe_AF_NFE = df.gnomADe_AF_NFE,
-                gnomADe_AF_OTH = df.gnomADe_AF_OTH,
-                gnomADe_AF_SAS = df.gnomADe_AF_SAS
-            FROM df
-            WHERE vep.variant_id = df.variant_id
-    """
-    connection.execute(sql)
-
 def fix_gnomADe(df, debug):
     for col in df.filter(regex='^gnomAD[eg]*_.*').columns:
         if debug: log.logit(f"Fixing: {col}")
@@ -277,7 +221,6 @@ def insert_vep(vep, annotation_connection, variant_connection, batch_number, deb
                 # Sometimes if the PD has too many NULL it cannot figure out the type to cast so it fails. See: https://github.com/duckdb/duckdb/issues/6811
                 annotation_connection.execute("SET GLOBAL pandas_analyze_sample=0")
                 annotation_connection.sql("CREATE TABLE IF NOT EXISTS vep AS SELECT * FROM df")
-            #fix_gnomADe_(annotation_connection, debug)
     return total
 
 def import_vep(annotation_db, variant_db, vep, batch_number, debug, clobber):
@@ -291,7 +234,7 @@ def import_vep(annotation_db, variant_db, vep, batch_number, debug, clobber):
         log.logit(f"All Done!", color="green")
 
 def dump_variants_batch(annotation_db, batch_number, debug):
-    log.logit(f"Annotating variants from batch: {batch_number} in {annotation_db} with putative driver information", color="green")
+    log.logit(f"Dumping variants from batch: {batch_number} in {annotation_db} to a CSV file for AnnotatePD.", color="green")
     annotation_connection = db.duckdb_connect_ro(annotation_db)
     log.logit(f"Grabbing Variants to perform AnnotatePD")
     sql = f'''
@@ -324,6 +267,7 @@ def import_annotate_pd(annotation_db, annotate_pd, batch_number, debug):
     df = process_annotate_pd(df, debug)
     if annotation_connection.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='pd'").fetchone():
         log.logit(f"The AnnotatePD table already exists, so we can insert the information directly")
+        annotation_connection.execute("SET GLOBAL pandas_analyze_sample=0")
         load_df_file_into_annotation(annotation_connection, df, "pd")
     else:
         log.logit(f"This is the first time the AnnotatePD table is being referenced. Creating the Table.")

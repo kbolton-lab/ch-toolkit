@@ -1,6 +1,7 @@
-import csv
 import os
 import duckdb
+import chip.vdbtools.importers.vcf as vcf
+import pandas as pd
 
 import chip.utils.logger as log
 import chip.utils.database as db
@@ -35,27 +36,18 @@ def setup_samples_tbl(connection):
     drop_indexes_samples(connection)
     return connection
 
-def bulk_insert_samples(connection, entries):
-    sql = f"INSERT INTO samples (sample_id, sample_name) VALUES (?, ?)"
-    log.logit(f"Starting to bulk insert samples into duckdb ( {len(entries)} items)")
-    duckdb.executemany(sql, entries, connection)
-    log.logit(f"Finished Samples Insertion")
-
 def insert_samples(samples_file, sample_duckdb, debug, clobber):
-    con = db.duckdb_connect_rw(sample_duckdb, clobber)
-    setup_samples_tbl(con)
-    sample_id = con.execute(f"SELECT MAX(sample_id) FROM samples;").fetchone()[0]
+    connection = db.duckdb_connect_rw(sample_duckdb, clobber)
+    setup_samples_tbl(connection)
+    sample_id = connection.execute(f"SELECT MAX(sample_id) FROM samples;").fetchone()[0]
     sample_id = 1 if sample_id is None else sample_id + 1
-    samples_reader = open(samples_file, 'r')
-    window = []
-    for line in samples_reader.readlines():
-        row = (sample_id , line.strip("\n"))
-        if debug: log.logit(f"{row}")
-        window.append(row)
-        sample_id += 1
-    samples_reader.close()
-    bulk_insert_samples(con, window)
-    create_indexes_samples(con)
-    con.close()
+    res = pd.read_csv(samples_file,
+            comment='#',
+            sep='\t',
+            header=None).rename(columns={0: "sample_name"})
+    df = pd.concat([pd.Series(list(range(sample_id, len(res)+sample_id))), res], axis=1).rename(columns={0: "sample_id"})
+    vcf.duckdb_load_df_file(connection, df, "samples")
+    create_indexes_samples(connection)
+    connection.close()
     log.logit(f"Finished inserting the samples from {samples_file}")
     log.logit(f"All Done!", color="green")

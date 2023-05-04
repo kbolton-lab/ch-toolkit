@@ -4,9 +4,9 @@ def import_samples(samples_file, sample_duckdb, debug, clobber):
     import chip.vdbtools.importers.samples as samples
     samples.insert_samples(samples_file, sample_duckdb, debug, clobber)
 
-def import_sample_variants(input_vcf, duck_db, batch_number, debug, clobber):
+def import_sample_variants(input_vcf, variant_db, batch_number, debug, clobber):
     import chip.vdbtools.importers.variants as variants
-    variants.import_sample_variants(input_vcf, duck_db, batch_number, debug, clobber)
+    variants.import_sample_variants(input_vcf, variant_db, batch_number, debug, clobber)
 
 def import_vcf(db_path, input_vcf, caller, variant_db, sample_db, batch_number, clobber, debug):
     dispatch = {
@@ -28,13 +28,9 @@ def import_caller_batch(db_path, caller_db, caller, batch_number, debug, clobber
     import chip.vdbtools.importers.callers as callers
     callers.ingest_caller_batch(db_path, caller_db, caller, batch_number, debug, clobber)
 
-def import_variant_batch(duckdb_file, redis_host, redis_port, batch_number, chromosome, clobber, work_dir, window_size, debug):
+def import_variant_batch(db_path, variant_db, batch_number, debug, clobber):
     import chip.vdbtools.importers.variants as variants
-    variants.ingest_variant_batch(duckdb_file, redis_host, redis_port, batch_number, chromosome, clobber, work_dir, window_size, debug)
-
-def import_variant_batch_(db_path, variant_db, batch_number, debug, clobber):
-    import chip.vdbtools.importers.variants as variants
-    variants.ingest_variant_batch_(db_path, variant_db, batch_number, debug, clobber)
+    variants.ingest_variant_batch(db_path, variant_db, batch_number, debug, clobber)
 
 def import_pon_pileup(variant_duckdb, pon_pileup, batch_number, debug, clobber):
     import chip.vdbtools.importers.variants as variants
