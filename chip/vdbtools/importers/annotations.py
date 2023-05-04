@@ -129,82 +129,77 @@ def prepareAnnotatePdData(df, vars, debug):
     log.logit(f"Merging information from {BOLTON_BICK_VARS}.", color="yellow")
     with indent(4, quote=' >'):
         dims = len(df)
-        tmp = df[(df['key'].isin(vars['key'])) | (df['gene_loci'].isin(vars['gene_loci_vep'].dropna()))]
-        variants = len(tmp)
-        if variants > 0:
+        df_tmp = df[(df['key'].isin(vars['key'])) | (df['gene_loci'].isin(vars['gene_loci_vep'].dropna())) | (df['gene_aachange'].isin(vars['gene_aachange'].dropna())) | (df['gene_cDNAchange'].isin(vars['gene_cDNAchange'].dropna()))]
+        if len(df_tmp) > 0:
+            df_tmp = df_tmp[['key', 'gene_loci', 'gene_aachange', 'gene_cDNAchange']]
+            df_tmp['truncating'] = "not"
+            df_tmp.loc[df['AAchange'].str.contains("Ter", na=False), 'truncating'] = "truncating"
+
+            tmp = vars[(vars['key'].isin(df_tmp['key'])) | (vars['gene_loci_vep'].isin(df_tmp['gene_loci'].dropna()))]
             sql = f'''
-                    SELECT l.key, l.gene_loci, r."n.loci.vep", r."source.totals.loci"
-                    FROM tmp l
-                    LEFT JOIN vars r
+                    SELECT l.*, r."n.loci.vep", r."source.totals.loci"
+                    FROM df_tmp l
+                    LEFT JOIN tmp r
                     ON l.key = r.key OR l.gene_loci = r.gene_loci_vep
             '''
+            df_tmp = duckdb.sql(sql).df()
+            df_tmp.drop_duplicates(inplace=True)
+            variants = len(df_tmp)
             log.logit(f"Adding n.loci to {variants} variants.")
-            tmp = duckdb.sql(sql).df()
-            tmp = tmp[['key', 'gene_loci', 'n.loci.vep', 'source.totals.loci']]
-            tmp.drop_duplicates(inplace=True)
-            df = pd.merge(df, tmp, on=['key', 'gene_loci'], how='left')
-        else:
-            df['n.loci.vep'] = None
-            df['source.totals.loci'] = None
 
-        df['truncating'] = "not"
-        df.loc[df['AAchange'].str.contains("Ter", na=False), 'truncating'] = "truncating"
-        tmp = df[(df['key'].isin(vars['key'])) | (df['gene_loci'].isin(vars['gene_loci_vep'].dropna()))]
-        variants = len(tmp)
-        if variants > 0:
             sql = f'''
-                    SELECT l.key, l.gene_loci, l.truncating, r."n.loci.truncating.vep", r."source.totals.loci.truncating"
-                    FROM tmp l
-                    LEFT JOIN vars r
+                    SELECT l.*, r."n.loci.truncating.vep", r."source.totals.loci.truncating"
+                    FROM df_tmp l
+                    LEFT JOIN tmp r
                     ON (l.key = r.key AND l.truncating = r.truncating) OR (l.gene_loci = r.gene_loci_vep AND l.truncating = r.truncating)
             '''
-            log.logit(f"Adding n.loci.truncating.vep to {variants} variants.")
-            tmp = duckdb.sql(sql).df()
-            tmp = tmp[['key', 'gene_loci', 'truncating', 'n.loci.truncating.vep', 'source.totals.loci.truncating']]
-            tmp.drop_duplicates(inplace=True)
-            df = pd.merge(df, tmp, on=['key', 'gene_loci', 'truncating'], how='left')
-        else:
-            df['n.loci.truncating.vep'] = None
-            df['source.totals.loci.truncating'] = None
-        df.drop(['truncating'], axis=1, inplace=True)
+            df_tmp = duckdb.sql(sql).df()
+            df_tmp.drop_duplicates(inplace=True)
+            df_tmp.drop(['truncating'], axis=1, inplace=True)
+            variants = len(df_tmp)
+            log.logit(f"Adding n.loci to {variants} variants.")
 
-        tmp = df[(df['key'].isin(vars['key'])) | (df['gene_aachange'].isin(vars['gene_aachange'].dropna()))]
-        variants = len(tmp)
-        if variants > 0:
+            tmp = vars[(vars['key'].isin(df_tmp['key'])) | (vars['gene_aachange'].isin(df_tmp['gene_aachange'].dropna()))]
             sql = f'''
-                    SELECT l.key, l.gene_aachange, r."n.HGVSp", r."source.totals.p"
-                    FROM tmp l
-                    LEFT JOIN vars r
+                    SELECT l.*, r."n.HGVSp", r."source.totals.p"
+                    FROM df_tmp l
+                    LEFT JOIN tmp r
                     ON l.key = r.key OR (l.gene_aachange = r.gene_aachange)
             '''
-            log.logit(f"Adding n.HGVSp to {variants} variants.")
-            tmp = duckdb.sql(sql).df()
-            tmp = tmp[['key', 'gene_aachange', 'n.HGVSp', 'source.totals.p']]
-            tmp.drop_duplicates(inplace=True)
-            df = pd.merge(df, tmp, on=['key', 'gene_aachange'], how='left')
-        else:
-            df['n.HGVSp'] = None
-            df['source.totals.p'] = None
+            df_tmp = duckdb.sql(sql).df()
+            df_tmp.drop_duplicates(inplace=True)
+            variants = len(df_tmp)
+            log.logit(f"Adding n.loci to {variants} variants.")
 
-        tmp = df[(df['key'].isin(vars['key'])) | (df['gene_cDNAchange'].isin(vars['gene_cDNAchange'].dropna()))]
-        variants = len(tmp)
-        if variants > 0:
+            tmp = vars[(vars['key'].isin(df_tmp['key'])) | (vars['gene_cDNAchange'].isin(df_tmp['gene_cDNAchange'].dropna()))]
             sql = f'''
-                    SELECT l.key, l.gene_cDNAchange, r."n.HGVSc", r."source.totals.c"
-                    FROM tmp l
-                    LEFT JOIN vars r
+                    SELECT l.*, r."n.HGVSc", r."source.totals.c"
+                    FROM df_tmp l LEFT JOIN tmp r
                     ON l.key = r.key OR (l.gene_cDNAchange = r.gene_cDNAchange)
             '''
-            log.logit(f"Adding n.HGVSc to {variants} variants.")
-            tmp = duckdb.sql(sql).df()
-            tmp = tmp[['key', 'gene_cDNAchange', 'n.HGVSc', 'source.totals.c']]
-            tmp.drop_duplicates(inplace=True)
-            df = pd.merge(df, tmp, on=['key', 'gene_cDNAchange'], how='left')
+            df_tmp = duckdb.sql(sql).df()
+            df_tmp.drop_duplicates(inplace=True)
+            variants = len(df_tmp)
+            log.logit(f"Adding n.loci to {variants} variants.")
         else:
-            df['n.HGVSc'] = None
-            df['source.totals.c'] = None
+            #bolton_bick_vars=['n.loci.vep','source.totals.loci', 'n.loci.truncating.vep', 'source.totals.loci.truncating', 'n.HGVSp', 'source.totals.p', 'n.HGVSc', 'source.totals.c']
+            #df_tmp.reindex(columns=[*df.columns.tolist(), *bolton_bick_vars])
+            df_tmp['n.loci.vep'] = None
+            df_tmp['source.totals.loci'] = None
+            df_tmp['n.loci.truncating.vep'] = None
+            df_tmp['source.totals.loci.truncating'] = None
+            df_tmp['n.HGVSp'] = None
+            df_tmp['source.totals.p'] = None
+            df_tmp['n.HGVSc'] = None
+            df_tmp['source.totals.c'] = None
+
+        df_tmp = df_tmp[['key', 'n.loci.vep', 'source.totals.loci', 'n.loci.truncating.vep', 'source.totals.loci.truncating', 'n.HGVSp', 'source.totals.p', 'n.HGVSc', 'source.totals.c']]
+        #df_tmp.drop(['gene_loci', 'gene_aachange', 'gene_cDNAchange'], axis=1, inplace=True)
+        log.logit(f"Summarizing information from {BOLTON_BICK_VARS}.", color="yellow")
+        df = pd.merge(df, df_tmp, on=['key'], how='left')
+
         if len(df) != dims: log.logit(f"ERROR: Something went wrong in the join. Dimensions don't match!", color="red")
-        if len(df) == dims: log.logit(f"SUCCESS.", color="green")
+        if len(df) == dims: log.logit(f"SUCCESS.", color="yellow")
     df.drop(['loci_p', 'loci_c', 'Location'], axis=1, inplace=True)
     return df
 
@@ -275,6 +270,7 @@ def insert_vep(vep, annotation_connection, variant_connection, batch_number, deb
             df = preprocess(df, debug)
             if annotation_connection.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='vep'").fetchone():
                 log.logit(f"The VEP table already exists, so we can insert the information directly")
+                annotation_connection.execute("SET GLOBAL pandas_analyze_sample=0")
                 load_df_file_into_annotation(annotation_connection, df, "vep")
             else:
                 log.logit(f"This is the first time the VEP table is being referenced. Creating the Table.")
@@ -305,8 +301,7 @@ def dump_variants_batch(annotation_db, batch_number, debug):
     '''
     df = annotation_connection.execute(sql).df()
     df[['CHROM', 'POS', 'REF', 'ALT']] = df['key'].str.split(':', expand=True)
-    df.rename({'variant_id':'SAMPLE',
-               'SYMBOL':'SYMBOL_VEP',
+    df.rename({'SYMBOL':'SYMBOL_VEP',
                'HGVSp':'HGVSp_VEP',
                'HGVSc':'HGVSc_VEP',
                'Consequence':'Consequence_VEP',
@@ -319,7 +314,6 @@ def dump_variants_batch(annotation_db, batch_number, debug):
     log.logit(f"All Done!", color="green")
 
 def process_annotate_pd(df, debug):
-    df.rename({'SAMPLE':'variant_id'}, axis=1, inplace=True)
     df.drop(['Consequence_VEP', 'SYMBOL_VEP', 'EXON_VEP', 'AAchange', 'HGVSc_VEP', 'HGVSp_VEP', 'n.HGVSc', 'n.HGVSp', 'CHROM', 'POS', 'REF', 'ALT'], axis=1, inplace=True)
     return df
 

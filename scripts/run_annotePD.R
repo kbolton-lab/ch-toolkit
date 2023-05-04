@@ -38,7 +38,7 @@ ONCO_KB_AVAILABLE_GENE <- "/storage1/fs1/bolton/Active/Users/DucTran/UkbbVar/Dat
   library(BSgenome)
   library(BSgenome.Hsapiens.UCSC.hg38)
   library(R453Plus1Toolbox)
-  #library(sqldf)
+  library(sqldf)
   library(jsonlite)
   
   message("Loading all support data...")
@@ -90,9 +90,11 @@ message("Calculating Complexity")
 df <- annotateComplexity(df)
 message("Done Complexity")
 
+df$key = paste0(df$CHROM, ":", df$POS, ":", df$REF, ":", df$ALT) 
+
 message("Run AnnotatePD")
 annotation <- annotatePD(df, supportData)
-df <- left_join(df, annotation, by = c("CHROM", "POS", "REF", "ALT", "SAMPLE"))
+df <- left_join(df, annotation, by = c("CHROM", "POS", "REF", "ALT"))
 message("Finished AnnotatePD")
 
 write.csv(df, "annotatePD_results.csv", row.names = FALSE)
