@@ -282,7 +282,19 @@ def merge_caller_tables(db_path, connection, batch_number, caller, debug):
             sample_name = os.path.basename(file).split('.')[1]
             log.logit(f"Merging: {file}")
             connection.execute(f"ATTACH \'{file}\' as sample_{i}")
-            connection.sql(f"INSERT INTO {caller} SELECT * FROM sample_{i}.{caller}")
+            sql = f"""
+                INSERT INTO {caller} SELECT s.*
+                FROM sample_{i}.{caller} s
+                WHERE (s.variant_id, s.sample_id) NOT IN (
+                    SELECT (variant_id, sample_id)
+                    FROM {caller} c
+                    WHERE (c.variant_id, c.sample_id) IN (
+                        SELECT (variant_id, sample_id)
+                        FROM sample_{i}.{caller}
+                    )
+                )
+            """
+            connection.sql(sql)
     log.logit(f"Finished merging all tables from: {db_path}")
 
 def ingest_caller_batch(db_path, caller_db, caller, batch_number, debug, clobber):

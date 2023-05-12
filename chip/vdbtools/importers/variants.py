@@ -188,7 +188,7 @@ def import_pon_pileup(variant_db, pon_pileup, batch_number, debug, clobber):
     counts, df = vcf.vcf_to_pd(pon_pileup, "pileup", batch_number, debug)
     vcf.duckdb_load_df_file(pileup_connection, df, "variants")
     #create_indexes(connection)
-    connection.close()
+    pileup_connection.close()
     log.logit(f"Importing pileup information into {variant_db}")
     variant_connection = db.duckdb_connect_rw(variant_db, False)
     update_pileup_variants(variant_connection, pileup_db, debug)

@@ -84,12 +84,12 @@ def merge_batch_vcf(db_path, caller_db, caller, batch_number, debug, clobber):
 @click.option('--batch-number', '-b', type=click.INT, required=True, help="The batch number of this import set")
 @click.option('--debug', '-d', is_flag=True, show_default=True, default=False, required=True, help="Print extra debugging output")
 @click.option('--clobber', '-f', is_flag=True, show_default=True, default=False, required=True, help="If exists, delete existing duckdb file and then start from scratch")
-def import_sample_variants(input_vcf, duck_db, batch_number, debug, clobber):
+def import_sample_variants(input_vcf, variant_db, batch_number, debug, clobber):
     """
     Registering variants into the duckdb database.
     """
     import chip.vdbtools.importer as importer
-    importer.import_sample_variants(input_vcf, duck_db, batch_number, debug, clobber)
+    importer.import_sample_variants(input_vcf, variant_db, batch_number, debug, clobber)
     log.logit(f"---> Successfully imported ({input_vcf})", color="green")
 
 @cli.command('merge-batch-variants', short_help="Combines all sample variant databases into a single database")

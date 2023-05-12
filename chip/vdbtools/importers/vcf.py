@@ -30,8 +30,7 @@ def vcf_to_pd(input_vcf, what_process, batch_number, debug):
     dispatch = {
         'variants'  : variants_to_df,
         'caller'    : caller_to_df,
-        'pileup'    : pileup_to_df,
-        'vep'       : vep_to_df
+        'pileup'    : pileup_to_df
     }
     function = dispatch[what_process]
     return function(input_vcf, batch_number, debug)
