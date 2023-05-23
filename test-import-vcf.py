@@ -370,7 +370,6 @@ def select_mutect(db_name):
 
 def join_test(variant_db_name, mutect_db_name):
 	con = duckdb.connect(mutect_db_name)
-	#con.execute(f"ATTACH '{variant_db_name}' (READ_ONLY)")
 	join_sql = """
 		select *
 		from   mutect m

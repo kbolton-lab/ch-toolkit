@@ -48,21 +48,21 @@ def import_samples(samples, sample_duckdb, debug, clobber):
 @click.option('--input-vcf', 'input_vcf', type=click.Path(exists=True), required=True, help="The VCF to be imported into the database")
 @click.option('--clobber', '-f', is_flag=True, show_default=True, default=False, required=True, help="If exists, delete existing duckdb file and then start from scratch")
 @click.option('--cdb', '-i', 'database', type=click.Path(), required=True, help="The duckdb database to import the caller data")
-@click.option('--vdb', 'variant_db', type=click.Path(), required=True, help="The duckdb database to fetch variant ID from")
-@click.option('--sdb', 'sample_db', type=click.Path(), required=True, help="The duckdb database to fetch sample ID from")
 @click.option('--batch-number', '-b', type=click.INT, required=True, help="The batch number of this import set")
 @click.option('--debug', '-d', is_flag=True, show_default=True, default=False, required=True, help="Print extra debugging output")
-def import_vcf(caller, input_vcf, database, variant_db, sample_db, batch_number, clobber, debug):
+def import_vcf(caller, input_vcf, database, batch_number, clobber, debug):
     """
     variantdb is a path to a sample variant sqlite database.
     """
     import chip.vdbtools.importer as importer
-    importer.import_vcf(database, input_vcf, caller, variant_db, sample_db, batch_number, clobber, debug)
+    importer.import_vcf(database, input_vcf, caller, batch_number, clobber, debug)
     puts(colored.green(f"---> Successfully imported ({input_vcf}) into {database}"))
 
 @cli.command('merge-batch-vcf', short_help="Combines all sample vcfs databases into a single database")
 @click.option('--db-path', '-p', type=click.Path(exists=True), required=True, help="The path to where all the databases for this batch is stored")
 @click.option('--cdb', 'caller_db', type=click.Path(), required=True, help="The variant database to import the batch into")
+@click.option('--vdb', 'variant_db', type=click.Path(), required=True, help="The duckdb database to fetch variant ID from")
+@click.option('--sdb', 'sample_db', type=click.Path(), required=True, help="The duckdb database to fetch sample ID from")
 @click.option('--caller', 'caller',
               type=click.Choice(['mutect', 'vardict'], case_sensitive=False),
               required=True,
@@ -70,12 +70,12 @@ def import_vcf(caller, input_vcf, database, variant_db, sample_db, batch_number,
 @click.option('--batch-number', '-b', type=click.INT, required=True, help="The batch number of this import set")
 @click.option('--debug', '-d', is_flag=True, show_default=True, default=False, required=True, help="Print extra debugging output")
 @click.option('--clobber', '-f', is_flag=True, show_default=True, default=False, required=True, help="If exists, delete existing duckdb file and then start from scratch")
-def merge_batch_vcf(db_path, caller_db, caller, batch_number, debug, clobber):
+def merge_batch_vcf(db_path, caller_db, variant_db, sample_db, caller, batch_number, debug, clobber):
     """
     Ingest the variants in a batch into main variants database
     """
     import chip.vdbtools.importer as importer
-    importer.import_caller_batch(db_path, caller_db, caller, batch_number, debug, clobber)
+    importer.import_caller_batch(db_path, caller_db, variant_db, sample_db, caller, batch_number, debug, clobber)
     log.logit(f"---> Successfully imported variant batch ({batch_number}) into {caller_db}", color="green")
 
 @cli.command('import-sample-variants', short_help="Register the variants for a VCF file into a variant database")
@@ -123,20 +123,21 @@ def dump_variants(variant_db, header_type, batch_number, chromosome, debug):
 
 @cli.command('import-pon-pileup', short_help="updates variants inside duckdb with PoN pileup information")
 @click.option('--vdb', 'variant_db', type=click.Path(exists=True), required=True, help="The duckdb database to fetch variant ID from")
+@click.option('--pdb', 'pileup_db', type=click.Path(), required=True, help="The duckdb database to fetch variant ID from")
 @click.option('--pon-pileup', '-p', 'pon_pileup', type=click.Path(exists=True), required=True, help="The pon pileup VCF to be imported into the variant database")
 @click.option('--batch-number', '-b', type=click.INT, required=True, help="The batch number of this variant set")
 @click.option('--debug', '-d', is_flag=True, show_default=True, default=False, required=True, help="Print extra debugging output")
 @click.option('--clobber', '-f', is_flag=True, show_default=True, default=False, required=True, help="If exists, delete existing duckdb file and then start from scratch")
-def import_pon_pileup(variant_db, pon_pileup, batch_number, debug, clobber):
+def import_pon_pileup(pileup_db, variant_db, pon_pileup, batch_number, debug, clobber):
     """
     Dumps the panel of normal pileup information from into variants duckdb
     """
     import chip.vdbtools.importer as importer
-    importer.import_pon_pileup(variant_db, pon_pileup, batch_number, debug, clobber)
+    importer.import_pon_pileup(pileup_db, variant_db, pon_pileup, batch_number, debug, clobber)
     log.logit(f"---> Successfully imported PoN Pileup from batch ({batch_number}) into {variant_db}", color="green")
 
 @cli.command('calculate-fishers-test', short_help="Updates the variants inside Mutect or Vardict tables with p-value from Fisher's Exact Test")
-@click.option('--vdb', 'variant_db', type=click.Path(exists=True), required=True, help="The duckdb database to fetch variant PoN Ref Depth and Alt Depth from")
+@click.option('--pdb', 'pileup_db', type=click.Path(exists=True), required=True, help="The duckdb database to fetch variant PoN Ref Depth and Alt Depth from")
 @click.option('--cdb', 'caller_db', type=click.Path(exists=True), required=True, help="The duckdb database to fetch variant caller information from")
 @click.option('--caller', 'caller',
               type=click.Choice(['mutect', 'vardict'], case_sensitive=False),
@@ -144,12 +145,12 @@ def import_pon_pileup(variant_db, pon_pileup, batch_number, debug, clobber):
               help="Type of VCF file to import")
 @click.option('--batch-number', '-b', type=click.INT, required=True, help="The batch number of this variant set")
 @click.option('--debug', '-d', is_flag=True, show_default=True, default=False, required=True, help="Print extra debugging output")
-def calculate_fishers_test(variant_db, caller_db, caller, batch_number, debug):
+def calculate_fishers_test(pileup_db, caller_db, caller, batch_number, debug):
     """
     Calculates the Fisher's Exact Test for all Variants within the Variant Caller duckdb
     """
     import chip.vdbtools.importers.callers as callers
-    callers.annotate_fisher_test(variant_db, caller_db, caller, batch_number, debug)
+    callers.annotate_fisher_test(pileup_db, caller_db, caller, batch_number, debug)
     log.logit(f"---> Successfully calculated the Fisher's Exact Test for variants within ({batch_number}) and {caller_db}", color="green")
 
 @cli.command('import-vep', short_help="updates variants inside duckdb with VEP information")

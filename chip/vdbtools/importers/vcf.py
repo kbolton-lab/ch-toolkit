@@ -52,8 +52,6 @@ def variants_to_df(input_vcf, batch_number, debug):
     res['batch'] = batch_number
     res['start'] = res['pos']
     res['end'] = res['pos'] + res['alt'].apply(len)
-    res['PoN_RefDepth'] = None
-    res['PoN_AltDepth'] = None
     res['key'] = res['chrom'] + ':' + res['pos'].astype(str) + ':' + res['ref'] + ':' + res['alt']
     total = len(res)
     return total, res
@@ -72,16 +70,13 @@ def pileup_to_df(input_vcf, batch_number, debug):
                                               7: "info"})
     log.logit(f"Finished reading in the pileup VCF")
     log.logit(f"Formatting the dataframe...")
+    res['key'] = res['chrom'] + ':' + res['pos'].astype(str) + ':' + res['ref'] + ':' + res['alt']
     res[['PoN_RefDepth','PoN_AltDepth']] = res['info'].str.split(";", expand=True)
     res['PoN_RefDepth'] = res['PoN_RefDepth'].str.split("=").str[1]
     res['PoN_AltDepth'] = res['PoN_AltDepth'].str.split("=").str[1]
-    res['snp'] = None
-    res['qc_pass'] = None
     res['batch'] = batch_number
-    res['start'] = None
-    res['end'] = None
-    res['key'] = res['chrom'] + ':' + res['pos'].astype(str) + ':' + res['ref'] + ':' + res['alt']
-    res = res[['chrom', 'pos', 'ref', 'alt', 'snp', 'qc_pass', 'batch', 'start', 'end', 'PoN_RefDepth', 'PoN_AltDepth', 'key']]
+    res['variant_id'] = None
+    res = res[['key', 'PoN_RefDepth', 'PoN_AltDepth', 'batch', 'variant_id']]
     log.logit(f"Finished preparing the dataframe...")
     total = len(res)
     return total, res

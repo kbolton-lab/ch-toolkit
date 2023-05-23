@@ -208,10 +208,11 @@ def insert_vep(vep, annotation_connection, variant_connection, batch_number, deb
             count, df = tsv_to_pd(nextLines, batch_number, header, debug)
             total += count
             cur = df.iloc[-1]['Location']
-            log.logit(f"{total} variants loaded. Current: {cur}")
+            log.logit(f"{total} variants loaded.")
             df = fix_gnomADe(df, debug)
             df = variants.insert_variant_keys(df, variant_connection, debug)
             df = preprocess(df, debug)
+            df.drop(['WildtypeProtein', 'FrameshiftSequence'], axis=1, inplace=True)
             if annotation_connection.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='vep'").fetchone():
                 log.logit(f"The VEP table already exists, so we can insert the information directly")
                 annotation_connection.execute("SET GLOBAL pandas_analyze_sample=0")

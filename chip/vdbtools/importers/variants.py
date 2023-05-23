@@ -21,53 +21,23 @@ def ensure_variants_table(connection):
             batch                  INTEGER,
             start                  INTEGER,
             stop                   INTEGER,
-            PoN_RefDepth           INTEGER,
-            PoN_AltDepth           INTEGER,
             key                    VARCHAR NOT NULL
         )
     """
     connection.execute(sql)
 
-def drop_indexes(connection):
-    log.logit("Dropping existing indexes on the variants table")
-    sql = "DROP INDEX IF EXISTS chrom_pos_ref_alt_idx"
+def ensure_pileup_table(connection):
+    log.logit("Ensuring or creating the pileup table")
+    sql = """
+        CREATE TABLE IF NOT EXISTS pileup(
+            key                    VARCHAR NOT NULL,
+            PoN_RefDepth           INTEGER,
+            PoN_AltDepth           INTEGER,
+            batch                  INTEGER,
+            variant_id             INTEGER
+        )
+    """
     connection.execute(sql)
-    # sql = "DROP INDEX IF EXISTS variant_id_idx"
-    # connection.execute(sql)
-    sql = "DROP INDEX IF EXISTS batch_id_idx"
-    connection.execute(sql)
-
-def create_indexes(connection):
-    log.logit("Creating new indexes on the variants table")
-    with indent(4, quote=' >'):
-        log.logit("Generating the chrom_pos_ref_alt_idx")
-        sql = """
-            CREATE UNIQUE INDEX chrom_pos_ref_alt_idx
-            ON variants ( chrom, pos, ref, alt )
-        """
-        connection.execute(sql)
-        #duckdb.sql(sql).show()
-
-        # log.logit("Generating the variant_id_idx")
-        # sql = """
-        #     CREATE UNIQUE INDEX variant_id_idx
-        #     ON variants ( variant_id )
-        # """
-        # connection.execute(sql)
-
-        log.logit("Generating the batch_id_idx")
-        sql = """
-            CREATE INDEX batch_id_idx
-            ON variants ( batch )
-        """
-        connection.execute(sql)
-        #duckdb.sql(sql).show()
-
-def setup_variants_table(connection):
-    log.logit("Preparing the variant database file")
-    ensure_variants_table(connection)
-    drop_indexes(connection)
-    return connection
 
 def merge_variants_tables(db_path, connection, batch_number, debug):
     log.logit(f'Merging Sample Variants from {db_path}')
@@ -89,16 +59,16 @@ def merge_variants_tables(db_path, connection, batch_number, debug):
                 )
             """
             connection.sql(sql)
+            connection.execute(f"DETACH sample_{i}")
     log.logit(f"Finished merging all tables from: {db_path}")
 
 def ingest_variant_batch(db_path, variant_db, batch_number, debug, clobber):
     log.logit(f"Ingesting variants from batch: {batch_number} into {variant_db}", color="green")
     connection = db.duckdb_connect_rw(variant_db, clobber)
-    setup_variants_table(connection)
+    ensure_variants_table(connection)
     connection.execute("ALTER TABLE variants ADD COLUMN IF NOT EXISTS variant_id BIGINT")
     merge_variants_tables(db_path, connection, batch_number, debug)
-    connection.execute("UPDATE variants SET variant_id = ROWID")
-    #create_indexes(connection)
+    connection.execute("UPDATE variants SET variant_id = ROWID + 1")
     connection.close()
     log.logit(f"Finished ingesting variants")
     log.logit(f"All Done!", color="green")
@@ -106,17 +76,16 @@ def ingest_variant_batch(db_path, variant_db, batch_number, debug, clobber):
 def import_sample_variants(input_vcf, variant_db, batch_number, debug, clobber):
     log.logit(f"Registering variants from file: {input_vcf}", color="green")
     connection = db.duckdb_connect_rw(variant_db, clobber)
-    setup_variants_table(connection)
+    ensure_variants_table(connection)
     counts, df = vcf.vcf_to_pd(input_vcf, "variants", batch_number, debug)
     vcf.duckdb_load_df_file(connection, df, "variants")
     connection.execute("ALTER TABLE variants ADD COLUMN IF NOT EXISTS variant_id BIGINT")
-    #create_indexes(connection)
     connection.close()
     log.logit(f"Finished registering variants")
     log.logit(f"Variants Processed - Total: {counts}", color="green")
     log.logit(f"All Done!", color="green")
 
-def insert_variant_id(df, connection, debug):
+def insert_variant_id_into_df(df, connection, debug):
     log.logit(f"Inserting variant_id for all variants")
     sql = f"""
             SELECT variant_id, key
@@ -130,6 +99,19 @@ def insert_variant_id(df, connection, debug):
     df = v.merge(df, on='key', how='left')
     df = df.drop('key', axis=1)
     return df
+
+def insert_variant_id_into_db(db, table, variant_db, debug):
+    log.logit(f"Inserting variant_id from {variant_db} for all {table} variants")
+    ensure_variants_table(db)
+    db.execute(f"ATTACH \'{variant_db}\' as v")
+    sql = f"""
+        UPDATE {table}
+        SET variant_id = v.variant_id
+        FROM v.variants v
+        WHERE {table}.key = v.key;
+    """
+    db.execute(sql)
+    db.execute(f"DETACH v")
 
 def insert_variant_keys(df, connection, debug):
     log.logit(f"Inserting variant key for all variants")
@@ -167,33 +149,15 @@ def dump_variant_batch(variant_db, header, batch_number, chromosome, debug):
     log.logit(f"Finished dumping variants into VCF file")
     log.logit(f"All Done!", color="green")
 
-def update_pileup_variants(connection, pileup_db, debug):
-    log.logit(f"Updating Pileup Information: {pileup_db} into Variants")
-    with indent(4, quote=' >'):
-        connection.execute(f"ATTACH \'{pileup_db}\' as pileup")
-        sql = f"""
-            UPDATE variants as v
-            SET PoN_RefDepth = p.PoN_RefDepth, PoN_AltDepth = p.PoN_AltDepth
-            FROM pileup.variants p
-            WHERE v.key = p.key
-        """
-        connection.sql(sql)
-    log.logit(f"Finished annotating variants with pileup information")
-
-def import_pon_pileup(variant_db, pon_pileup, batch_number, debug, clobber):
-    pileup_db = f"batch{batch_number}.pileup.db"
-    log.logit(f"Adding pileup from batch: {batch_number} into {variant_db}", color="green")
+def import_pon_pileup(pileup_db, variant_db, pon_pileup, batch_number, debug, clobber):
+    log.logit(f"Adding pileup from batch: {batch_number} into {pileup_db}", color="green")
     pileup_connection = db.duckdb_connect_rw(pileup_db, clobber)
-    setup_variants_table(pileup_connection)
+    ensure_pileup_table(pileup_connection)
     counts, df = vcf.vcf_to_pd(pon_pileup, "pileup", batch_number, debug)
-    vcf.duckdb_load_df_file(pileup_connection, df, "variants")
-    #create_indexes(connection)
+    vcf.duckdb_load_df_file(pileup_connection, df, "pileup")
+    log.logit(f"Adding Variant IDs to the pileup database")
+    insert_variant_id_into_db(pileup_connection, "pileup", variant_db, debug)
     pileup_connection.close()
-    log.logit(f"Importing pileup information into {variant_db}")
-    variant_connection = db.duckdb_connect_rw(variant_db, False)
-    update_pileup_variants(variant_connection, pileup_db, debug)
-    variant_connection.close()
-    os.unlink(pileup_db)
     log.logit(f"Finished importing pileup information")
     log.logit(f"Variants Processed - Total: {counts}", color="green")
     log.logit(f"All Done!", color="green")
