@@ -95,7 +95,9 @@ def insert_variant_id_into_df(df, connection, debug):
                 FROM df
             )
     """
+    if debug: log.logit(f"Executing: {sql}")
     v = connection.execute(sql).df()
+    if debug: log.logit(f"SQL Complete")
     df = v.merge(df, on='key', how='left')
     df = df.drop('key', axis=1)
     return df
@@ -110,8 +112,10 @@ def insert_variant_id_into_db(db, table, variant_db, debug):
         FROM v.variants v
         WHERE {table}.key = v.key;
     """
+    if debug: log.logit(f"Executing: {sql}")
     db.execute(sql)
     db.execute(f"DETACH v")
+    if debug: log.logit(f"SQL Complete")
 
 def insert_variant_keys(df, connection, debug):
     log.logit(f"Inserting variant key for all variants")
@@ -123,7 +127,9 @@ def insert_variant_keys(df, connection, debug):
                 FROM df
             )
     """
+    if debug: log.logit(f"Executing: {sql}")
     keys = connection.execute(sql).df()
+    if debug: log.logit(f"SQL Complete")
     df = keys.merge(df, on='variant_id', how='left')
     return df
 

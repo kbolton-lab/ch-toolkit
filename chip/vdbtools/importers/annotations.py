@@ -11,7 +11,7 @@ from clint.textui import indent
 ANNOTATION_FILES="/storage1/fs1/bolton/Active/Protected/Annotation_Files/"
 BOLTON_BICK_VARS="bick.bolton.vars3.txt"
 
-def load_df_file_into_annotation(connection, df, table):
+def load_df_file_into_annotation(connection, df, table, debug):
     sql = f"""
         INSERT INTO {table} SELECT df.*
         FROM df
@@ -24,8 +24,11 @@ def load_df_file_into_annotation(connection, df, table):
             )
         )
     """
+
     log.logit(f"Starting to insert pandas dataframe into duckdb")
+    if debug: log.logit(f"Executing: {sql}")
     connection.execute(sql)
+    if debug: log.logit(f"SQL Complete")
     log.logit(f"Finished inserting pandas dataframe into duckdb")
 
 #chr1:12828529:C:A variant_id: 71547 - For cases like this... we need to do some pre-processing because the original fixed_b38_exome.vcf.gz has duplicates
@@ -166,7 +169,7 @@ def tsv_to_pd(tsv, batch_number, header, debug):
     res['batch'] = batch_number
     return total, res
 
-def annotate_pd_to_pd(annotate_pd, batch_number, header, debug):
+def annotate_pd_to_pd(annotate_pd, batch_number, debug):
     log.logit(f"Reading in the AnnotatePD CSV...")
     window = 5_000_000
     all_res = []
@@ -216,7 +219,7 @@ def insert_vep(vep, annotation_connection, variant_connection, batch_number, deb
             if annotation_connection.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='vep'").fetchone():
                 log.logit(f"The VEP table already exists, so we can insert the information directly")
                 annotation_connection.execute("SET GLOBAL pandas_analyze_sample=0")
-                load_df_file_into_annotation(annotation_connection, df, "vep")
+                load_df_file_into_annotation(annotation_connection, df, "vep", debug)
             else:
                 log.logit(f"This is the first time the VEP table is being referenced. Creating the Table.")
                 # Sometimes if the PD has too many NULL it cannot figure out the type to cast so it fails. See: https://github.com/duckdb/duckdb/issues/6811
@@ -243,15 +246,17 @@ def dump_variants_batch(annotation_db, batch_number, debug):
             FROM vep
             WHERE batch = {batch_number} AND SYMBOL != \'-\' AND Consequence NOT LIKE 'intron_variant%'
     '''
+    if debug: log.logit(f"Executing: {sql}")
     df = annotation_connection.execute(sql).df()
+    if debug: log.logit(f"SQL Complete")
+    total = len(df)
+    log.logit(f"{total} variants grabbed from {annotation_db} for {batch_number}")
     df[['CHROM', 'POS', 'REF', 'ALT']] = df['key'].str.split(':', expand=True)
     df.rename({'SYMBOL':'SYMBOL_VEP',
                'HGVSp':'HGVSp_VEP',
                'HGVSc':'HGVSc_VEP',
                'Consequence':'Consequence_VEP',
                'EXON':'EXON_VEP'}, axis=1, inplace=True)
-    total = len(df)
-    log.logit(f"{total} variants grabbed from {annotation_db} for {batch_number}")
     annotation_connection.close()
     df.to_csv(f"batch-{batch_number}-forAnnotatePD.csv", index=False)
     log.logit(f"Finished dumping variants into CSV file")
@@ -264,12 +269,12 @@ def process_annotate_pd(df, debug):
 def import_annotate_pd(annotation_db, annotate_pd, batch_number, debug):
     log.logit(f"Adding AnnotatePD Information from batch: {batch_number} into {annotation_db}", color="green")
     annotation_connection = db.duckdb_connect_rw(annotation_db, False)
-    counts, df = annotate_pd_to_pd(annotate_pd, annotation_connection, batch_number, debug)
+    counts, df = annotate_pd_to_pd(annotate_pd, batch_number, debug)
     df = process_annotate_pd(df, debug)
     if annotation_connection.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='pd'").fetchone():
         log.logit(f"The AnnotatePD table already exists, so we can insert the information directly")
         annotation_connection.execute("SET GLOBAL pandas_analyze_sample=0")
-        load_df_file_into_annotation(annotation_connection, df, "pd")
+        load_df_file_into_annotation(annotation_connection, df, "pd", debug)
     else:
         log.logit(f"This is the first time the AnnotatePD table is being referenced. Creating the Table.")
         # Sometimes if the PD has too many NULL it cannot figure out the type to cast so it fails. See: https://github.com/duckdb/duckdb/issues/6811

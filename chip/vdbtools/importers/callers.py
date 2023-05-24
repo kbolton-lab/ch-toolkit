@@ -272,8 +272,8 @@ def merge_caller_tables(db_path, caller_connection, variant_db, sample_db, batch
             """
             if debug: log.logit(f"Executing: {sql}")
             caller_connection.sql(sql)
-            if debug: log.logit(f"Detaching {file}")
             caller_connection.execute(f"DETACH sample_{i}")
+            if debug: log.logit(f"SQL Complete")
     log.logit(f"Finished merging all tables from: {db_path}")
 
 def ingest_caller_batch(db_path, caller_db, variant_db, sample_db, caller, batch_number, debug, clobber):
@@ -297,8 +297,10 @@ def annotate_fisher_test(pileup_db, caller_db, caller, batch_number, debug):
         ON c.variant_id = v.variant_id
         WHERE c.fisher_p_value is NULL AND PoN_RefDepth is NOT NULL AND PoN_AltDepth is NOT NULL
     '''
+    if debug: log.logit(f"Executing: {sql}")
     df = caller_connection.execute(sql).df()
     caller_connection.execute(f"DETACH pileup")
+    if debug: log.logit(f"SQL Complete")
     length = len(df)
     log.logit(f"There were {length} variants without fisher test p-value within {caller_db}")
     log.logit(f"Calculating Fisher Exact Test for all variants inside {caller_db}")

@@ -47,7 +47,9 @@ def insert_sample_id_into_df(df, connection, debug):
                 FROM df
             )
     """
+    if debug: log.logit(f"Executing: {sql}")
     s = connection.execute(sql).df()
+    if debug: log.logit(f"SQL Complete")
     df = s.merge(df, on='sample_name', how='left')
     df = df.drop('sample_name', axis=1)
     return df
@@ -61,7 +63,8 @@ def insert_sample_id_into_db(db, caller, sample_db, debug):
         FROM s.samples s
         WHERE {caller}.sample_name = s.sample_name;
     """
-    if debug: log.logit(f"Starting Updating sample_id")
+    if debug: log.logit(f"Executing: {sql}")
     db.execute(sql)
     db.execute(f"DETACH s")
+    if debug: log.logit(f"SQL Complete")
     if debug: log.logit(f"Successfully Updated sample_id")
