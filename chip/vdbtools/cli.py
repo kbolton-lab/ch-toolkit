@@ -30,15 +30,16 @@ def init_db(db_path, sample_name):
 @cli.command('import-samples', short_help="Loads a CSV containing samples into samples database")
 @click.option('--samples', '-s', type=click.Path(exists=True), required=True, help="A CSV file with the samples")
 @click.option('--sdb', 'sample_duckdb', type=click.Path(), required=True, help="The duckdb database to store sample information")
+@click.option('--batch-number', '-b', type=click.INT, required=True, help="The batch number of this import set")
 @click.option('--debug', '-d', is_flag=True, show_default=True, default=False, required=True, help="Print extra debugging output")
 @click.option('--clobber', '-f', is_flag=True, show_default=True, default=False, required=True, help="If exists, delete existing duckdb file and then start from scratch")
-def import_samples(samples, sample_duckdb, debug, clobber):
+def import_samples(samples, sample_duckdb, batch_number, debug, clobber):
     """
     Loading samples into duckdb
     """
     import chip.vdbtools.importer as importer
-    importer.import_samples(samples, sample_duckdb, debug, clobber)
-    puts(colored.green(f"---> Successfully imported ({samples}) into {sample_duckdb}"))
+    importer.import_samples(samples, sample_duckdb, batch_number, debug, clobber)
+    puts(colored.green(f"---> Successfully imported ({samples}) from batch {batch_number} into {sample_duckdb}"))
 
 @cli.command('import-sample-vcf', short_help="import a vcf file into sample variant database")
 @click.option('--caller', 'caller',
@@ -130,11 +131,11 @@ def dump_variants(variant_db, header_type, batch_number, chromosome, debug):
 @click.option('--clobber', '-f', is_flag=True, show_default=True, default=False, required=True, help="If exists, delete existing duckdb file and then start from scratch")
 def import_pon_pileup(pileup_db, variant_db, pon_pileup, batch_number, debug, clobber):
     """
-    Dumps the panel of normal pileup information from into variants duckdb
+    Dumps the panel of normal pileup information from into a pileup duckdb
     """
     import chip.vdbtools.importer as importer
     importer.import_pon_pileup(pileup_db, variant_db, pon_pileup, batch_number, debug, clobber)
-    log.logit(f"---> Successfully imported PoN Pileup from batch ({batch_number}) into {variant_db}", color="green")
+    log.logit(f"---> Successfully imported PoN Pileup from batch ({batch_number}) into {pileup_db}", color="green")
 
 @cli.command('calculate-fishers-test', short_help="Updates the variants inside Mutect or Vardict tables with p-value from Fisher's Exact Test")
 @click.option('--pdb', 'pileup_db', type=click.Path(exists=True), required=True, help="The duckdb database to fetch variant PoN Ref Depth and Alt Depth from")
@@ -192,3 +193,16 @@ def import_annotate_pd(annotation_db, annotate_pd, batch_number, debug):
     import chip.vdbtools.importer as importer
     importer.import_annotate_pd(annotation_db, annotate_pd, batch_number, debug)
     log.logit(f"---> Successfully annotated variants from batch ({batch_number}) in {annotation_db}", color="green")
+
+@cli.command('dump-ch', short_help="Outputs CH Variants from Database")
+@click.option('--mcdb', 'mutect_db', type=click.Path(exists=True), required=True, help="The mutect database")
+@click.option('--vcdb', 'vardict_db', type=click.Path(exists=True), required=True, help="The vardict database")
+@click.option('--adb', 'annotation_db', type=click.Path(exists=True), required=True, help="The annotation database")
+@click.option('--debug', '-d', is_flag=True, show_default=True, default=False, required=True, help="Print extra debugging output")
+def dump_ch_variants(mutect_db, vardict_db, annotation_db, debug):
+    """
+    Combines all information and outputs CH Variants
+    """
+    import chip.vdbtools.dump as dump
+    dump.dump_ch_variants(mutect_db, vardict_db, annotation_db, debug)
+    log.logit(f"---> Successfully dumped CH Variants", color="green")

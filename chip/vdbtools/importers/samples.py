@@ -11,12 +11,13 @@ def ensure_samples_tbl(connection):
     sql = '''
         CREATE TABLE IF NOT EXISTS samples (
             sample_id          integer NOT NULL PRIMARY KEY,
-            sample_name        varchar(50) NOT NULL UNIQUE
+            sample_name        varchar(50) NOT NULL UNIQUE,
+            batch              integer NOT NULL
         )
     '''
     connection.execute(sql)
 
-def insert_samples(samples_file, sample_duckdb, debug, clobber):
+def insert_samples(samples_file, sample_duckdb, batch_number, debug, clobber):
     connection = db.duckdb_connect_rw(sample_duckdb, clobber)
     ensure_samples_tbl(connection)
     sample_id = connection.execute(f"SELECT MAX(sample_id) FROM samples;").fetchone()[0]
@@ -32,6 +33,7 @@ def insert_samples(samples_file, sample_duckdb, debug, clobber):
             res = res[res['sample_name'] != sample]
     sample_id = 1 if sample_id is None else sample_id + 1
     df = pd.concat([pd.Series(list(range(sample_id, len(res)+sample_id))), res], axis=1).rename(columns={0: "sample_id"})
+    df['batch'] = batch_number
     vcf.duckdb_load_df_file(connection, df, "samples")
     connection.close()
     log.logit(f"Finished inserting the samples from {samples_file}")

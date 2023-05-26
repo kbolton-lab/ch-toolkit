@@ -1,8 +1,8 @@
 import sys
 
-def import_samples(samples_file, sample_duckdb, debug, clobber):
+def import_samples(samples_file, sample_duckdb, batch_number, debug, clobber):
     import chip.vdbtools.importers.samples as samples
-    samples.insert_samples(samples_file, sample_duckdb, debug, clobber)
+    samples.insert_samples(samples_file, sample_duckdb, batch_number, debug, clobber)
 
 def import_sample_variants(input_vcf, variant_db, batch_number, debug, clobber):
     import chip.vdbtools.importers.variants as variants

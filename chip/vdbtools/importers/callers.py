@@ -81,7 +81,8 @@ def ensure_mutect_tbl(connection):
             pon_max_vaf                         decimal(10,5),
             fisher_p_value                      decimal(22,20),
             sample_id                           integer,
-            variant_id                          integer
+            variant_id                          integer,
+            batch                               integer
         )
     '''
     connection.execute(sql)
@@ -159,7 +160,8 @@ def ensure_vardict_tbl(connection):
             pon_max_vaf             decimal(10,5),
             fisher_p_value          decimal(22,20),
             sample_id               integer,
-            variant_id              integer
+            variant_id              integer,
+            batch                   integer,
         )
     '''
     connection.execute(sql)
@@ -195,7 +197,7 @@ def process_mutect(df, debug):
     df['fisher_p_value'] = None
     df['sample_id'] = None
     df['variant_id'] = None
-    df = df[['sample_name', 'key', 'version', 'mutect_filter', 'info_as_filterstatus', 'info_as_sb_table', 'info_dp', 'info_ecnt', 'info_mbq_ref', 'info_mbq_alt', 'info_mfrl_ref', 'info_mfrl_alt', 'info_mmq_ref', 'info_mmq_alt', 'info_mpos', 'info_popaf', 'info_roq', 'info_rpa_ref', 'info_rpa_alt', 'info_ru', 'info_str', 'info_strq', 'info_tlod', 'format_af', 'format_dp', 'format_ref_count', 'format_alt_count', 'format_ref_f1r2', 'format_alt_f1r2', 'format_ref_f2r1', 'format_alt_f2r1', 'format_gt', 'format_ref_fwd', 'format_ref_rev', 'format_alt_fwd', 'format_alt_rev', 'pon_2at2_percent', 'pon_nat2_percent', 'pon_max_vaf', 'fisher_p_value', 'sample_id', 'variant_id']]
+    df = df[['sample_name', 'key', 'version', 'mutect_filter', 'info_as_filterstatus', 'info_as_sb_table', 'info_dp', 'info_ecnt', 'info_mbq_ref', 'info_mbq_alt', 'info_mfrl_ref', 'info_mfrl_alt', 'info_mmq_ref', 'info_mmq_alt', 'info_mpos', 'info_popaf', 'info_roq', 'info_rpa_ref', 'info_rpa_alt', 'info_ru', 'info_str', 'info_strq', 'info_tlod', 'format_af', 'format_dp', 'format_ref_count', 'format_alt_count', 'format_ref_f1r2', 'format_alt_f1r2', 'format_ref_f2r1', 'format_alt_f2r1', 'format_gt', 'format_ref_fwd', 'format_ref_rev', 'format_alt_fwd', 'format_alt_rev', 'pon_2at2_percent', 'pon_nat2_percent', 'pon_max_vaf', 'fisher_p_value', 'sample_id', 'variant_id', 'batch']]
     df = df.drop_duplicates(subset='key', keep='first')
     return df
 
@@ -226,7 +228,7 @@ def process_vardict(df, debug):
     df['fisher_p_value'] = None
     df['sample_id'] = None
     df['variant_id'] = None
-    df = df[['sample_name', 'key', 'version', 'vardict_filter', 'info_type', 'info_dp', 'info_vd', 'info_af', 'info_bias', 'info_refbias', 'info_varbias', 'info_pmean', 'info_pstd', 'info_qual', 'info_qstd', 'info_sbf', 'info_oddratio', 'info_mq', 'info_sn', 'info_hiaf', 'info_adjaf', 'info_shift3', 'info_msi', 'info_msilen', 'info_nm', 'info_lseq', 'info_rseq', 'info_hicnt', 'info_hicov', 'info_splitread', 'info_spanpair', 'info_duprate', 'format_ref_count', 'format_alt_count', 'format_gt', 'format_dp', 'format_vd', 'format_af', 'format_ref_fwd', 'format_ref_rev', 'format_alt_fwd', 'format_alt_rev', 'pon_2at2_percent', 'pon_nat2_percent', 'pon_max_vaf', 'fisher_p_value', 'sample_id', 'variant_id']]
+    df = df[['sample_name', 'key', 'version', 'vardict_filter', 'info_type', 'info_dp', 'info_vd', 'info_af', 'info_bias', 'info_refbias', 'info_varbias', 'info_pmean', 'info_pstd', 'info_qual', 'info_qstd', 'info_sbf', 'info_oddratio', 'info_mq', 'info_sn', 'info_hiaf', 'info_adjaf', 'info_shift3', 'info_msi', 'info_msilen', 'info_nm', 'info_lseq', 'info_rseq', 'info_hicnt', 'info_hicov', 'info_splitread', 'info_spanpair', 'info_duprate', 'format_ref_count', 'format_alt_count', 'format_gt', 'format_dp', 'format_vd', 'format_af', 'format_ref_fwd', 'format_ref_rev', 'format_alt_fwd', 'format_alt_rev', 'pon_2at2_percent', 'pon_nat2_percent', 'pon_max_vaf', 'fisher_p_value', 'sample_id', 'variant_id', 'batch']]
     df = df.drop_duplicates(subset='key', keep='first')
     return df
 
@@ -289,13 +291,16 @@ def annotate_fisher_test(pileup_db, caller_db, caller, batch_number, debug):
     log.logit(f"Performing the Fisher's Exact Test on the variants inside {caller_db} for batch: {batch_number}")
     caller = "mutect" if caller.lower() == "mutect" else "vardict"
     caller_connection = db.duckdb_connect_rw(caller_db, False)
-    log.logit(f"Finding all variants within {caller_db} that does not have the fisher's exact test p-value calcualted...")
+    log.logit(f"Finding all variants within {caller_db} that does not have the fisher's exact test p-value calcualted for batch: {batch_number}")
     caller_connection.execute(f"ATTACH '{pileup_db}' as pileup")
     sql = f'''
         SELECT c.variant_id, c.sample_id, v.PoN_RefDepth, v.PoN_AltDepth, c.format_ref_fwd, c.format_ref_rev, c.format_alt_fwd, c.format_alt_rev,
         FROM {caller} c LEFT JOIN pileup.pileup v
         ON c.variant_id = v.variant_id
-        WHERE c.fisher_p_value is NULL AND PoN_RefDepth is NOT NULL AND PoN_AltDepth is NOT NULL
+        WHERE c.fisher_p_value is NULL AND
+            PoN_RefDepth is NOT NULL AND
+            PoN_AltDepth is NOT NULL AND
+            c.batch = {batch_number}
     '''
     if debug: log.logit(f"Executing: {sql}")
     df = caller_connection.execute(sql).df()

@@ -151,6 +151,7 @@ def caller_to_df(input_vcf, batch_number, debug):
     log.logit(f"Finished formatting INFO and FORMAT columns...")
     res['key'] = res['CHROM'] + ':' + res['POS'].astype(str) + ':' + res['REF'] + ':' + res['ALT'] #Key needed to get VariantID
     res['FILTER'] = res['FILTER'].str.split(";")
+    res['batch'] = batch_number
     total = len(res)
     return total, res
 
