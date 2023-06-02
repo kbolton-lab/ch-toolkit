@@ -1,4 +1,3 @@
-import vcfpy
 import collections
 import pysam
 import os, io, gzip
@@ -8,14 +7,6 @@ import ch.utils.logger as log
 import pandas as pd
 
 from clint.textui import indent, puts_err, puts
-
-class Vcf:
-    def __init__(self, vcf_path):
-        self.vcf_path = vcf_path
-        self.reader = vcfpy.Reader.from_path(self.vcf_path)
-
-    def reset_reader(self):
-        self.reader = vcfpy.Reader.from_path(self.vcf_path)
 
 def duckdb_load_df_file(duckdb_connection, df, table):
     sql = f"""
