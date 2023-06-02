@@ -5,7 +5,6 @@ import duckdb
 import ch.vdbtools.importers.vcf as vcf
 import ch.utils.logger as log
 import ch.utils.database as db
-import ch.utils.csv_utils as csv_utils
 from clint.textui import indent, puts_err, puts
 
 def ensure_variants_table(connection):
