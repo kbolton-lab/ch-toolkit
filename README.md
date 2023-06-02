@@ -1,112 +1,46 @@
-# CHIP Toolkit
+# CH Toolkit
 
-A collection of utilities and tools used in the Clonal Hematopoiesis of Indeterminate Potential (CHIP) pipeline.  More details coming soon!
+A collection of utilities and tools used in the Clonal Hematopoiesis (CH) pipeline.  More details coming soon!
 
-## Database Management
+## Cloud Pipeline
 
-### Proposed CLI
+_<Placeholder about WDL/Cloud pipeline for realignment, variant calling, and Panel-of-Normal pileup>_
 
-    chip-variant-db init --db /path/to/sample.db --sample-name sample1
-    chip-variant-db import-vcf --caller=lofreq --input-vcf=sample1.lofreq.vcf.gz /path/to/sample.db
-    chip-variant-db dump-vcf --output-vcf=dump.vcf.gz /path/to/sample.db
-    chip-variant-db merge-dbs --master-db=/path/to/master.db /path/to/sample.db
-    chip-variant-db dump-stats --output-file /path/to/sample.db
-    chip-variant-db update-db --input-vcf=sample1.pon_annotated.vcf.gz /path/to/sample.db
+## Annotation Database Management
 
-## Workflow Pipelines (Moonshot Project)
+### CLI
 
-### Proposed CLI
+```
+Usage: ch-toolkit [OPTIONS] COMMAND [ARGS]...
 
-#### Ingestion Pipeline
+  A collection of db related tools for handling sample data.
 
-| Pipeline Attribute | Description |
-| ------------------ | ----------- |
-| **Goal:** | Normalize various sample inputs into either a standardized input format |
-| **Main Input:**  | FASTQs or unaligned bams |
-| **Main Output:** | An aligned and indexed bam. |
+Options:
+  --version   Show the version and exit.
+  -h, --help  Show this message and exit.
 
-    chip-workflow ingestion \
-        --input-fastqs fof-of-fastqs.csv \
-        --output-directory /path/to/outdir \
-        --configs /path/to/other-configs.yaml \
-        --jobmgr /path/to/scheduler-configs.yaml
+Commands:
+  calculate-fishers-test  Updates the variants inside Mutect or Vardict tables
+                          with p-value from Fisher's Exact Test
+  dump-annotations        dumps all variant annotations inside duckdb into a
+                          CSV file
+  dump-ch                 Outputs CH Variants from Database
+  dump-variants           dumps all variants inside duckdb into a VCF file
+  import-annotate-pd      annotates variants with their pathogenicity
+  import-pon-pileup       updates variants inside duckdb with PoN pileup
+                          information
+  import-sample-variants  Register the variants for a VCF file into a variant
+                          database
+  import-sample-vcf       import a vcf file into sample variant database
+  import-samples          Loads a CSV containing samples into samples database
+  import-vep              updates variants inside duckdb with VEP information
+  merge-batch-variants    Combines all sample variant databases into a single
+                          database
+  merge-batch-vcf         Combines all sample vcfs databases into a single
+                          database
+```
 
-#### Alignment and Variant Calling Pipeline
+### Workflow Diagram
 
-| Pipeline Attribute | Description |
-| ------------------ | ----------- |
-| **Goal:** | Align and variant call the indexed bam (per sample) |
-| **Main Input:** | An indexed bam. |
-| **Main Output:** | A database of variant calls per sample |
+_<picture of the annotation pipelne>_
 
-    chip-workflow align-vc \
-        --input-bam indexed.bam \
-        --output-directory /path/to/outdir \
-        --configs /path/to/other-configs.yaml \
-        --jobmgr /path/to/scheduler-configs.yaml
-
-#### Panel of Normal (PoN) Computations
-
-| Pipeline Attribute | Description |
-| ------------------ | ----------- |
-| **Goal:** | Normalize sample inputs into either an indexed.bam _(or indexed.cram)_. |
-| **Main Input:** | A database of sample variants. |
-| **Main Output:** | A database of variant statistics |
-
-_(This pipeline could work on a cohort of sample variants for improved performance.)_
-
-    chip-workflow pon-computation \
-        --input-variant-db /path/to/samples.db \
-        --input-pon-db /path/to/pon.db \
-        --output-directory /path/to/outdir \
-        --configs /path/to/other-configs.yaml \
-        --jobmgr /path/to/scheduler-configs.yaml
-
-#### Variant Annotations
-
-| Pipeline Attribute | Description |
-| ------------------ | ----------- |
-| **Goal:** | Annotate a set of variants. |
-| **Main Input:** | A database of variants from 1 or more samples. |
-| **Main Output:** | An updated database of variants from 1 or more samples. |
-
-_(This pipeline could work on a cohort of sample variants for improved performance.)_
-
-    chip-workflow annotation \
-        --input-db /path/to/samples.db \
-        --input-pon-db /path/to/pon.db \
-        --output-directory /path/to/outdir \
-        --configs /path/to/other-configs.yaml \
-        --jobmgr /path/to/scheduler-configs.yaml
-
-#### Machine Learning
-
-| Pipeline Attribute | Description |
-| ------------------ | ----------- |
-| **Goal:** | Run candidate variants through a ML model |
-| **Main Input:** | A database of variants from 1 or more samples. |
-| **Main Output:** | An updated database of variants from 1 or more samples? (ML model dependent?) |
-
-_(This pipeline could work on a cohort of sample variants for improved performance.)_
-
-    chip-workflow ml-model \
-        --input-db /path/to/samples.db \
-        --output-directory /path/to/outdir \
-        --configs /path/to/other-configs.yaml \
-        --jobmgr /path/to/scheduler-configs.yaml
-
-#### Finalization
-
-| Pipeline Attribute | Description |
-| ------------------ | ----------- |
-| **Goal:** | Assemble, Clean and Merge any disparate data or files or  Make Final Standarized Reports |
-| **Main Input:** | A database of variants from 1 or more samples. |
-| **Main Output:** | ??? |
-
-_(This pipeline could work on a cohort of sample variants for improved performance.)_
-
-    chip-workflow finalization \
-        --input-db /path/to/samples.db \
-        --output-directory /path/to/outdir \
-        --configs /path/to/other-configs.yaml \
-        --jobmgr /path/to/scheduler-configs.yaml
