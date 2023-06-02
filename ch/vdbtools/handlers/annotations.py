@@ -2,8 +2,8 @@ import os, io, re
 import pandas as pd
 import duckdb
 
-import ch.vdbtools.importers.vcf as vcf
-import ch.vdbtools.importers.variants as variants
+import ch.vdbtools.handlers.vcf as vcf
+import ch.vdbtools.handlers.variants as variants
 import ch.utils.logger as log
 import ch.utils.database as db
 from clint.textui import indent

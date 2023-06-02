@@ -1,8 +1,7 @@
 import os, csv, glob
-import vcfpy
 import duckdb
 
-import ch.vdbtools.importers.vcf as vcf
+import ch.vdbtools.handlers.vcf as vcf
 import ch.utils.logger as log
 import ch.utils.database as db
 from clint.textui import indent, puts_err, puts

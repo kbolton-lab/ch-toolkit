@@ -1,6 +1,6 @@
 import os
 import duckdb
-import ch.vdbtools.importers.vcf as vcf
+import ch.vdbtools.handlers.vcf as vcf
 import pandas as pd
 
 import ch.utils.logger as log

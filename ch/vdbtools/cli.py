@@ -138,7 +138,7 @@ def calculate_fishers_test(pileup_db, caller_db, caller, batch_number, debug):
     """
     Calculates the Fisher's Exact Test for all Variants within the Variant Caller duckdb
     """
-    import ch.vdbtools.importers.callers as callers
+    import ch.vdbtools.handlers.callers as callers
     callers.annotate_fisher_test(pileup_db, caller_db, caller, batch_number, debug)
     log.logit(f"---> Successfully calculated the Fisher's Exact Test for variants within ({batch_number}) and {caller_db}", color="green")
 

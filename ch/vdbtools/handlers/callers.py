@@ -3,9 +3,9 @@ import vcfpy
 import duckdb
 import pandas as pd
 
-import ch.vdbtools.importers.vcf as vcf
-import ch.vdbtools.importers.variants as variants
-import ch.vdbtools.importers.samples as samples
+import ch.vdbtools.handlers.vcf as vcf
+import ch.vdbtools.handlers.variants as variants
+import ch.vdbtools.handlers.samples as samples
 import ch.utils.logger as log
 import ch.utils.database as db
 import ch.utils.fisher_exact_test as fisher_test
