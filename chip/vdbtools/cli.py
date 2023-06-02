@@ -15,18 +15,6 @@ def cli():
     # http://newbebweb.blogspot.com/2012/02/python-head-ioerror-errno-32-broken.html
     signal.signal(signal.SIGPIPE, signal.SIG_DFL)
 
-@cli.command('init', short_help="initialize a SNP/INDEL and SV candidate database")
-@click.option('--db', 'db_path', default=None, type=click.Path(), required=True,
-              help="Path to create sqlite database")
-@click.option('--sample-name', 'sample_name', type=click.STRING, required=True,
-              help="Sample Name for the variant database")
-def init_db(db_path, sample_name):
-    if os.path.exists(db_path):
-        sys.exit(f"[err] Variant Database '{db_path}' already exists on filesystem!")
-    import chip.dbtools.initialize as init
-    init.create_db(db_path, sample_name)
-    puts(colored.green(f"---> Successfully created variant database ({sample_name}): {db_path}"))
-
 @cli.command('import-samples', short_help="Loads a CSV containing samples into samples database")
 @click.option('--samples', '-s', type=click.Path(exists=True), required=True, help="A CSV file with the samples")
 @click.option('--sdb', 'sample_duckdb', type=click.Path(), required=True, help="The duckdb database to store sample information")
