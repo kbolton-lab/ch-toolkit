@@ -278,13 +278,13 @@ def merge_caller_tables(db_path, caller_connection, variant_db, sample_db, batch
             if debug: log.logit(f"SQL Complete")
     log.logit(f"Finished merging all tables from: {db_path}")
 
-def ingest_caller_batch(db_path, caller_db, variant_db, sample_db, caller, batch_number, debug, clobber):
-    log.logit(f"Ingesting variants from batch: {batch_number} into {caller_db}", color="green")
+def insert_caller_batch(db_path, caller_db, variant_db, sample_db, caller, batch_number, debug, clobber):
+    log.logit(f"Inserting variants from batch: {batch_number} into {caller_db}", color="green")
     caller_connection = db.duckdb_connect_rw(caller_db, clobber)
     setup_caller_tbl(caller_connection, caller)
     merge_caller_tables(db_path, caller_connection, variant_db, sample_db, batch_number, caller, debug)
     caller_connection.close()
-    log.logit(f"Finished ingesting variants")
+    log.logit(f"Finished inserting variants")
     log.logit(f"All Done!", color="green")
 
 def annotate_fisher_test(pileup_db, caller_db, caller, batch_number, debug):

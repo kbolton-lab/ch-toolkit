@@ -60,15 +60,15 @@ def merge_variants_tables(db_path, connection, batch_number, debug):
             connection.execute(f"DETACH sample_{i}")
     log.logit(f"Finished merging all tables from: {db_path}")
 
-def ingest_variant_batch(db_path, variant_db, batch_number, debug, clobber):
-    log.logit(f"Ingesting variants from batch: {batch_number} into {variant_db}", color="green")
+def insert_variant_batch(db_path, variant_db, batch_number, debug, clobber):
+    log.logit(f"Inserting variants from batch: {batch_number} into {variant_db}", color="green")
     connection = db.duckdb_connect_rw(variant_db, clobber)
     ensure_variants_table(connection)
     connection.execute("ALTER TABLE variants ADD COLUMN IF NOT EXISTS variant_id BIGINT")
     merge_variants_tables(db_path, connection, batch_number, debug)
     connection.execute("UPDATE variants SET variant_id = ROWID + 1")
     connection.close()
-    log.logit(f"Finished ingesting variants")
+    log.logit(f"Finished inserting variants")
     log.logit(f"All Done!", color="green")
 
 def import_sample_variants(input_vcf, variant_db, batch_number, debug, clobber):

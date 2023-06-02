@@ -26,11 +26,11 @@ def import_vardict(db_path, input_vcf, batch_number, clobber, debug):
 
 def import_caller_batch(db_path, caller_db, variant_db, sample_db, caller, batch_number, debug, clobber):
     import ch.vdbtools.handlers.callers as callers
-    callers.ingest_caller_batch(db_path, caller_db, variant_db, sample_db, caller, batch_number, debug, clobber)
+    callers.insert_caller_batch(db_path, caller_db, variant_db, sample_db, caller, batch_number, debug, clobber)
 
 def import_variant_batch(db_path, variant_db, batch_number, debug, clobber):
     import ch.vdbtools.handlers.variants as variants
-    variants.ingest_variant_batch(db_path, variant_db, batch_number, debug, clobber)
+    variants.insert_variant_batch(db_path, variant_db, batch_number, debug, clobber)
 
 def import_pon_pileup(pileup_db, variant_db, pon_pileup, batch_number, debug, clobber):
     import ch.vdbtools.handlers.variants as variants
