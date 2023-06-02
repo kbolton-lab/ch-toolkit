@@ -1,7 +1,7 @@
 import sys, time, datetime
 
-import chip.utils.logger as log
-import chip.utils.redis as redis
+import ch.utils.logger as log
+import ch.utils.redis as redis
 
 from clint.textui import indent, puts_err, puts
 import vcfpy

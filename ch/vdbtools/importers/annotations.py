@@ -2,10 +2,10 @@ import os, io, re
 import pandas as pd
 import duckdb
 
-import chip.vdbtools.importers.vcf as vcf
-import chip.vdbtools.importers.variants as variants
-import chip.utils.logger as log
-import chip.utils.database as db
+import ch.vdbtools.importers.vcf as vcf
+import ch.vdbtools.importers.variants as variants
+import ch.utils.logger as log
+import ch.utils.database as db
 from clint.textui import indent
 
 ANNOTATION_FILES="/storage1/fs1/bolton/Active/Protected/Annotation_Files/"

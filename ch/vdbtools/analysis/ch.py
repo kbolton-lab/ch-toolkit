@@ -1,8 +1,8 @@
 import sys
 import duckdb
 import pandas as pd
-import chip.utils.logger as log
-import chip.utils.database as db
+import ch.utils.logger as log
+import ch.utils.database as db
 
 # CH Definition
 # - Pass Mutect & Pass Vardict                          DONE

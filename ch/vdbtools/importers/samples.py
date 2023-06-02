@@ -1,10 +1,10 @@
 import os
 import duckdb
-import chip.vdbtools.importers.vcf as vcf
+import ch.vdbtools.importers.vcf as vcf
 import pandas as pd
 
-import chip.utils.logger as log
-import chip.utils.database as db
+import ch.utils.logger as log
+import ch.utils.database as db
 
 def ensure_samples_tbl(connection):
     log.logit("Ensuring or creating the samples table")

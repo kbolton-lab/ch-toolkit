@@ -1,7 +1,7 @@
 import os, csv
 import vcfpy
 
-import chip.utils.logger as log
+import ch.utils.logger as log
 from clint.textui import indent, puts_err, puts
 
 def in_lsf_session():

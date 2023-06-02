@@ -3,12 +3,12 @@ import vcfpy
 import duckdb
 import pandas as pd
 
-import chip.vdbtools.importers.vcf as vcf
-import chip.vdbtools.importers.variants as variants
-import chip.vdbtools.importers.samples as samples
-import chip.utils.logger as log
-import chip.utils.database as db
-import chip.utils.fisher_exact_test as fisher_test
+import ch.vdbtools.importers.vcf as vcf
+import ch.vdbtools.importers.variants as variants
+import ch.vdbtools.importers.samples as samples
+import ch.utils.logger as log
+import ch.utils.database as db
+import ch.utils.fisher_exact_test as fisher_test
 from clint.textui import indent
 
 def ensure_mutect_tbl(connection):

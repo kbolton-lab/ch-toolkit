@@ -2,8 +2,8 @@ import os, sys, signal
 import click
 from clint.textui import puts, colored
 
-from chip.version import __version__
-import chip.utils.logger as log
+from ch.version import __version__
+import ch.utils.logger as log
 
 CONTEXT_SETTINGS = dict(help_option_names=['-h', '--help'])
 
@@ -25,7 +25,7 @@ def import_samples(samples, sample_duckdb, batch_number, debug, clobber):
     """
     Loading samples into duckdb
     """
-    import chip.vdbtools.importer as importer
+    import ch.vdbtools.importer as importer
     importer.import_samples(samples, sample_duckdb, batch_number, debug, clobber)
     puts(colored.green(f"---> Successfully imported ({samples}) from batch {batch_number} into {sample_duckdb}"))
 
@@ -43,7 +43,7 @@ def import_vcf(caller, input_vcf, database, batch_number, clobber, debug):
     """
     variantdb is a path to a sample variant sqlite database.
     """
-    import chip.vdbtools.importer as importer
+    import ch.vdbtools.importer as importer
     importer.import_vcf(database, input_vcf, caller, batch_number, clobber, debug)
     puts(colored.green(f"---> Successfully imported ({input_vcf}) into {database}"))
 
@@ -63,7 +63,7 @@ def merge_batch_vcf(db_path, caller_db, variant_db, sample_db, caller, batch_num
     """
     Ingest the variants in a batch into main variants database
     """
-    import chip.vdbtools.importer as importer
+    import ch.vdbtools.importer as importer
     importer.import_caller_batch(db_path, caller_db, variant_db, sample_db, caller, batch_number, debug, clobber)
     log.logit(f"---> Successfully imported variant batch ({batch_number}) into {caller_db}", color="green")
 
@@ -77,7 +77,7 @@ def import_sample_variants(input_vcf, variant_db, batch_number, debug, clobber):
     """
     Registering variants into the duckdb database.
     """
-    import chip.vdbtools.importer as importer
+    import ch.vdbtools.importer as importer
     importer.import_sample_variants(input_vcf, variant_db, batch_number, debug, clobber)
     log.logit(f"---> Successfully imported ({input_vcf})", color="green")
 
@@ -91,7 +91,7 @@ def merge_batch_variants(db_path, variant_db, batch_number, debug, clobber):
     """
     Ingest the variants in a batch into main variants database
     """
-    import chip.vdbtools.importer as importer
+    import ch.vdbtools.importer as importer
     importer.import_variant_batch(db_path, variant_db, batch_number, debug, clobber)
     log.logit(f"---> Successfully imported variant batch ({batch_number}) into {variant_db}", color="green")
 
@@ -106,7 +106,7 @@ def dump_variants(variant_db, header_type, batch_number, chromosome, debug):
     """
     Dumps the variants from duckdb into a VCF file
     """
-    import chip.vdbtools.dump as dump
+    import ch.vdbtools.dump as dump
     dump.dump_variant_batch(variant_db, header_type, batch_number, chromosome, debug)
     log.logit(f"---> Successfully dumped variant batch ({batch_number}) from {variant_db}", color="green")
 
@@ -121,7 +121,7 @@ def import_pon_pileup(pileup_db, variant_db, pon_pileup, batch_number, debug, cl
     """
     Dumps the panel of normal pileup information from into a pileup duckdb
     """
-    import chip.vdbtools.importer as importer
+    import ch.vdbtools.importer as importer
     importer.import_pon_pileup(pileup_db, variant_db, pon_pileup, batch_number, debug, clobber)
     log.logit(f"---> Successfully imported PoN Pileup from batch ({batch_number}) into {pileup_db}", color="green")
 
@@ -138,7 +138,7 @@ def calculate_fishers_test(pileup_db, caller_db, caller, batch_number, debug):
     """
     Calculates the Fisher's Exact Test for all Variants within the Variant Caller duckdb
     """
-    import chip.vdbtools.importers.callers as callers
+    import ch.vdbtools.importers.callers as callers
     callers.annotate_fisher_test(pileup_db, caller_db, caller, batch_number, debug)
     log.logit(f"---> Successfully calculated the Fisher's Exact Test for variants within ({batch_number}) and {caller_db}", color="green")
 
@@ -153,7 +153,7 @@ def import_vep(annotation_db, variant_db, vep, batch_number, debug, clobber):
     """
     Dumps the vep information into an annotation duckdb
     """
-    import chip.vdbtools.importer as importer
+    import ch.vdbtools.importer as importer
     importer.import_vep(annotation_db, variant_db, vep, batch_number, debug, clobber)
     log.logit(f"---> Successfully imported VEP from batch ({batch_number}) into {annotation_db}", color="green")
 
@@ -165,7 +165,7 @@ def dump_variants_for_annotate_pd(annotation_db, batch_number, debug):
     """
     Dumps the variant annotations from duckdb into a CSV file
     """
-    import chip.vdbtools.dump as dump
+    import ch.vdbtools.dump as dump
     dump.dump_variants_for_annotate_pd(annotation_db, batch_number, debug)
     log.logit(f"---> Successfully dumped variant annotations batch ({batch_number}) from {annotation_db}", color="green")
 
@@ -178,7 +178,7 @@ def import_annotate_pd(annotation_db, annotate_pd, batch_number, debug):
     """
     Dumps the vep information into an annotation duckdb
     """
-    import chip.vdbtools.importer as importer
+    import ch.vdbtools.importer as importer
     importer.import_annotate_pd(annotation_db, annotate_pd, batch_number, debug)
     log.logit(f"---> Successfully annotated variants from batch ({batch_number}) in {annotation_db}", color="green")
 
@@ -191,6 +191,6 @@ def dump_ch_variants(mutect_db, vardict_db, annotation_db, debug):
     """
     Combines all information and outputs CH Variants
     """
-    import chip.vdbtools.dump as dump
+    import ch.vdbtools.dump as dump
     dump.dump_ch_variants(mutect_db, vardict_db, annotation_db, debug)
     log.logit(f"---> Successfully dumped CH Variants", color="green")

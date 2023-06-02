@@ -4,7 +4,7 @@ import pysam
 import os, io, gzip
 
 import importlib.resources
-import chip.utils.logger as log
+import ch.utils.logger as log
 import pandas as pd
 
 from clint.textui import indent, puts_err, puts
@@ -162,11 +162,11 @@ def load_simple_header(header_type):
         return(source)
     elif header_type == "simple":
         log.logit("Loading simple VCF header...")
-        source = importlib.resources.files('chip.resources.vcf').joinpath('simple.header')
+        source = importlib.resources.files('ch.resources.vcf').joinpath('simple.header')
         return(source)
     else:
         log.logit("Loading default VCF header...")
-        source = importlib.resources.files('chip.resources.vcf').joinpath('dummy.header')
+        source = importlib.resources.files('ch.resources.vcf').joinpath('dummy.header')
         return(source)
 
 def variants_to_vcf(duckdb_variants, header_type, batch_number, chromosome, debug):

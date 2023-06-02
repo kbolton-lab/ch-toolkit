@@ -1,6 +1,6 @@
 import os, sys
 
-import chip.utils.logger as log
+import ch.utils.logger as log
 
 import redis
 import duckdb
