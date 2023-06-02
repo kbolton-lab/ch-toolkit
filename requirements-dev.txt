@@ -2,6 +2,4 @@ click
 clint
 google-auth
 google-cloud-storage
-vcfpy
 duckdb
-redis
