@@ -71,14 +71,18 @@ def dump_ch_variants(mutect_db, vardict_db, annotation_db, debug):
         )
     ) OR (key = 'chr20:32434638:A:AG' OR key = 'chr20:32434638:A:AGG');
 
-    SELECT *
+    COPY (SELECT m.sample_name, m.key, m.mutect_filter, m.info_mbq_ref, m.info_mbq_alt, m.info_mmq_ref, m.info_mmq_alt, m.format_af, m.format_dp, m.format_ref_count, m.format_alt_count, m.format_ref_f1r2, m.format_alt_f1r2, m.format_ref_f2r1, m.format_alt_f2r1, m.format_ref_fwd, m.format_ref_rev, m.format_alt_fwd, m.format_alt_rev, m.fisher_p_value, m.batch,
+    v.vardict_filter, v.info_qual, v.info_mq, v.info_nm, v.format_ref_count, v.format_alt_count, v.format_dp, v.format_vd, v.format_af, v.format_ref_fwd, v.format_ref_rev, v.format_alt_fwd, v.format_alt_rev, v.fisher_p_value,
+    a.*
         FROM mutect_filtered m
         INNER JOIN vardict_filtered v
         ON m.variant_id = v.variant_id AND m.sample_id = v.sample_id
         LEFT JOIN pd_filtered a
         ON m.variant_id = a.variant_id
-        WHERE (m.format_alt_fwd >= 1 AND m.format_alt_rev >= 1) OR (v.format_alt_fwd >= 1 AND v.format_alt_rev >= 1);
+        WHERE (m.format_alt_fwd >= 1 AND m.format_alt_rev >= 1) OR (v.format_alt_fwd >= 1 AND v.format_alt_rev >= 1)
+    ) TO 'ch_pd.csv' (HEADER, DELIMITER ',');
     """
+
 
     #AND fisher_p_value <= 1.260958e-09
     #
