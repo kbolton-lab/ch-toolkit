@@ -1,5 +1,5 @@
 click
 clint
-google-auth
-google-cloud-storage
 duckdb
+pandas
+fisher
