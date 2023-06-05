@@ -2,11 +2,11 @@
 
 A collection of utilities and tools used in the Clonal Hematopoiesis (CH) pipeline.  More details coming soon!
 
-## Cloud Pipeline
+## Sample Alignment &amp; Variant Calling Pipeline
 
 _<Placeholder about WDL/Cloud pipeline for realignment, variant calling, and Panel-of-Normal pileup>_
 
-## Annotation Database Management
+## Variant Annotation Pipeline
 
 ### CLI
 
