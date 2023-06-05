@@ -42,5 +42,5 @@ Commands:
 
 ### Workflow Diagram
 
-_<picture of the annotation pipelne>_
+![CH WGS Annotation Pipeline](docsi/mages/ch-pipeline-wgs.png)
 
