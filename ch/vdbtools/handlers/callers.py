@@ -1,5 +1,4 @@
 import os, glob
-import vcfpy
 import duckdb
 import pandas as pd
 
