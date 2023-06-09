@@ -6,7 +6,7 @@ import ch.utils.database as db
 
 # CH Definition
 # - Pass Mutect & Pass Vardict                          DONE
-# - Pass PON, PON2,                                     DONE - Assume Fisher
+# - Pass PON, PON2,                                     DONE
 # - max(mutect_vaf, vardict_vaf) >= 0.02
 # - and gnomAD                                          DONE
 # - Mutect Strand Alt >= 1 OR Vardict Strand Alt >= 1   DONE
@@ -82,10 +82,7 @@ def dump_ch_variants(mutect_db, vardict_db, annotation_db, debug):
         WHERE (m.format_alt_fwd >= 1 AND m.format_alt_rev >= 1) OR (v.format_alt_fwd >= 1 AND v.format_alt_rev >= 1)
     ) TO 'ch_pd.csv' (HEADER, DELIMITER ',');
     """
-
-
     #AND fisher_p_value <= 1.260958e-09
-    #
     if debug: log.logit(f"Executing: {sql}")
     df = connection.execute(sql).df()
     connection.execute(f"DROP VIEW pd_filtered; DROP VIEW mutect_filtered; DROP VIEW vardict_filtered;")

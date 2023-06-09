@@ -78,18 +78,18 @@ def prepareAnnotatePdData(df, vars, debug):
         dims = len(df)
         df_tmp = df[(df['key'].isin(vars['key'])) | (df['gene_loci'].isin(vars['gene_loci_vep'].dropna())) | (df['gene_aachange'].isin(vars['gene_aachange'].dropna())) | (df['gene_cDNAchange'].isin(vars['gene_cDNAchange'].dropna()))]
         if len(df_tmp) > 0:
-            df_tmp = df_tmp[['key', 'gene_loci', 'gene_aachange', 'gene_cDNAchange']]
+            df_tmp = df_tmp[['key', 'gene_loci', 'gene_aachange', 'gene_cDNAchange']].astype(object)
             df_tmp['truncating'] = "not"
             df_tmp.loc[df['AAchange'].str.contains("Ter", na=False), 'truncating'] = "truncating"
 
-            tmp = vars[(vars['key'].isin(df_tmp['key'])) | (vars['gene_loci_vep'].isin(df_tmp['gene_loci'].dropna()))]
+            tmp = vars[(vars['key'].isin(df_tmp['key'])) | (vars['gene_loci_vep'].isin(df_tmp['gene_loci'].dropna()))].astype(object)
             sql = f'''
                     SELECT l.*, r."n.loci.vep", r."source.totals.loci"
                     FROM df_tmp l
                     LEFT JOIN tmp r
                     ON l.key = r.key OR l.gene_loci = r.gene_loci_vep
             '''
-            df_tmp = duckdb.sql(sql).df()
+            df_tmp = duckdb.sql(sql).df().astype(object)
             df_tmp.drop_duplicates(inplace=True)
             variants = len(df_tmp)
             log.logit(f"Adding n.loci to {variants} variants.")
@@ -100,31 +100,31 @@ def prepareAnnotatePdData(df, vars, debug):
                     LEFT JOIN tmp r
                     ON (l.key = r.key AND l.truncating = r.truncating) OR (l.gene_loci = r.gene_loci_vep AND l.truncating = r.truncating)
             '''
-            df_tmp = duckdb.sql(sql).df()
+            df_tmp = duckdb.sql(sql).df().astype(object)
             df_tmp.drop_duplicates(inplace=True)
             df_tmp.drop(['truncating'], axis=1, inplace=True)
             variants = len(df_tmp)
             log.logit(f"Adding n.loci to {variants} variants.")
 
-            tmp = vars[(vars['key'].isin(df_tmp['key'])) | (vars['gene_aachange'].isin(df_tmp['gene_aachange'].dropna()))]
+            tmp = vars[(vars['key'].isin(df_tmp['key'])) | (vars['gene_aachange'].isin(df_tmp['gene_aachange'].dropna()))].astype(object)
             sql = f'''
                     SELECT l.*, r."n.HGVSp", r."source.totals.p"
                     FROM df_tmp l
                     LEFT JOIN tmp r
                     ON l.key = r.key OR (l.gene_aachange = r.gene_aachange)
             '''
-            df_tmp = duckdb.sql(sql).df()
+            df_tmp = duckdb.sql(sql).df().astype(object)
             df_tmp.drop_duplicates(inplace=True)
             variants = len(df_tmp)
             log.logit(f"Adding n.loci to {variants} variants.")
 
-            tmp = vars[(vars['key'].isin(df_tmp['key'])) | (vars['gene_cDNAchange'].isin(df_tmp['gene_cDNAchange'].dropna()))]
+            tmp = vars[(vars['key'].isin(df_tmp['key'])) | (vars['gene_cDNAchange'].isin(df_tmp['gene_cDNAchange'].dropna()))].astype(object)
             sql = f'''
                     SELECT l.*, r."n.HGVSc", r."source.totals.c"
                     FROM df_tmp l LEFT JOIN tmp r
                     ON l.key = r.key OR (l.gene_cDNAchange = r.gene_cDNAchange)
             '''
-            df_tmp = duckdb.sql(sql).df()
+            df_tmp = duckdb.sql(sql).df().astype(object)
             df_tmp.drop_duplicates(inplace=True)
             variants = len(df_tmp)
             log.logit(f"Adding n.loci to {variants} variants.")

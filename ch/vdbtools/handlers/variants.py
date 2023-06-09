@@ -102,7 +102,6 @@ def insert_variant_id_into_df(df, connection, debug):
 
 def insert_variant_id_into_db(db, table, variant_db, debug):
     log.logit(f"Inserting variant_id from {variant_db} for all {table} variants")
-    ensure_variants_table(db)
     db.execute(f"ATTACH \'{variant_db}\' as v")
     sql = f"""
         UPDATE {table}
