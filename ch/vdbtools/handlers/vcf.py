@@ -44,6 +44,7 @@ def variants_to_df(input_vcf, batch_number, debug):
     res['start'] = res['pos']
     res['end'] = res['pos'] + res['alt'].apply(len)
     res['key'] = res['chrom'] + ':' + res['pos'].astype(str) + ':' + res['ref'] + ':' + res['alt']
+    res['variant_id'] = None
     total = len(res)
     return total, res
 

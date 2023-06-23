@@ -50,8 +50,8 @@ def import_vcf(caller, input_vcf, database, batch_number, clobber, debug):
 @cli.command('merge-batch-vcf', short_help="Combines all sample vcfs databases into a single database")
 @click.option('--db-path', '-p', type=click.Path(exists=True), required=True, help="The path to where all the databases for this batch is stored")
 @click.option('--cdb', 'caller_db', type=click.Path(), required=True, help="The variant database to import the batch into")
-@click.option('--vdb', 'variant_db', type=click.Path(), required=True, help="The duckdb database to fetch variant ID from")
-@click.option('--sdb', 'sample_db', type=click.Path(), required=True, help="The duckdb database to fetch sample ID from")
+@click.option('--vdb', 'variant_db', type=click.Path(exists=True), required=True, help="The duckdb database to fetch variant ID from")
+@click.option('--sdb', 'sample_db', type=click.Path(exists=True), required=True, help="The duckdb database to fetch sample ID from")
 @click.option('--caller', 'caller',
               type=click.Choice(['mutect', 'vardict'], case_sensitive=False),
               required=True,
