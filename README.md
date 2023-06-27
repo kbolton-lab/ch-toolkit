@@ -5,8 +5,11 @@ The CH Toolkit is a collection of utilities and tools created by Irenaeus Chan (
 ## Sample Alignment &amp; Variant Calling Pipeline
 
 Variant Calling is performed using two separate Variant Callers: GATK's Mutect2 and AstraZeneca's VarDict
+
 To improve on cost and runtime performance, only genomic regions where Mutect2 successfully called and passed variants are used as input BED windows to VarDict.
+
 Details behind this WDL workflow can be found here under the [ArCH WGS Variant Calling Pipeline](https://github.com/kbolton-lab/ArCH/blob/main/WDL/WGS/Subworkflows/variant_calling.wdl).
+
 The subsequent variants called by both callers are then sanitized, normalized, and filtered for common Germline variants before being used as inputs for this toolkit.
 
 ## Variant Annotation
