@@ -18,6 +18,7 @@ def ensure_samples_tbl(connection):
     connection.execute(sql)
 
 def insert_samples(samples_file, sample_duckdb, batch_number, debug, clobber):
+    log.logit(f"Import Sample Information from file: {samples_file}", color="green")
     connection = db.duckdb_connect_rw(sample_duckdb, clobber)
     ensure_samples_tbl(connection)
     sample_id = connection.execute(f"SELECT MAX(sample_id) FROM samples;").fetchone()[0]
