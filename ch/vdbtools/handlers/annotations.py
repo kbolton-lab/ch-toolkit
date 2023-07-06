@@ -44,10 +44,13 @@ def fix_gnomADe(df, debug):
 def annotateGnomad(df, debug):
     log.logit(f"Formatting gnomAD Information...")
     #df[df.filter(regex="^gnomAD[eg]*_.*").columns] = df[df.filter(regex="^gnomAD[eg]*_.*").columns].replace({"":0, ".":0, "-":0}).astype(float)
-    df['max_gnomAD_AF_VEP'] = df.filter(regex=("^gnomAD_.*AF")).max(axis=1)
+    if 'gnomAD_AF' in df.columns: df['max_gnomAD_AF_VEP'] = df.filter(regex=("^gnomAD_.*AF")).max(axis=1)
     df['max_gnomADe_AF_VEP'] = df.filter(regex=("^gnomADe_AF.")).max(axis=1)
     df['max_gnomADg_AF_VEP'] = df.filter(regex=("^gnomADg_AF.")).max(axis=1)
-    df['max_pop_gnomAD_AF'] = df[['gnomAD_AF', 'gnomADe_AF', 'gnomADg_AF']].max(axis=1)
+    if 'gnomAD_AF' in df.columns:
+        df['max_pop_gnomAD_AF'] = df[['gnomAD_AF', 'gnomADe_AF', 'gnomADg_AF']].max(axis=1)
+    else:
+        df['max_pop_gnomAD_AF'] = df[['gnomADe_AF', 'gnomADg_AF']].max(axis=1)
     return df
 
 def prepareAnnotatePdData(df, vars, debug):
@@ -215,7 +218,7 @@ def insert_vep(vep, annotation_connection, variant_connection, batch_number, deb
             df = fix_gnomADe(df, debug)
             df = variants.insert_variant_keys(df, variant_connection, debug)
             df = preprocess(df, debug)
-            df.drop(['WildtypeProtein', 'FrameshiftSequence'], axis=1, inplace=True)
+            if 'WildtypeProtein' in df.columns: df.drop(['WildtypeProtein', 'FrameshiftSequence'], axis=1, inplace=True)
             if annotation_connection.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='vep'").fetchone():
                 log.logit(f"The VEP table already exists, so we can insert the information directly")
                 annotation_connection.execute("SET GLOBAL pandas_analyze_sample=0")
