@@ -1,0 +1,18 @@
+# Ignore pycache
+*__pycache__/
+
+# Ignoring DuckDB Files
+*.db
+
+# Ignoring DS_Store
+.DS_Store
+._.DS_Store
+
+# Ignoring Raw Data (for Test)
+data/*
+washu-cad-1.csv
+
+# Ignore virtual environment
+venv/*
+ccdg_pipeline_toolkit.egg-info/*
+
