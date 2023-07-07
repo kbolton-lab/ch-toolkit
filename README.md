@@ -23,6 +23,18 @@ To consolidate as much information as possible prior to filtering for CH variant
 
 While this tool is meant to be run as a stand-alone infrastructure, for the purposes of automation, a [WDL workflow](https://github.com/kbolton-lab/ArCH/blob/main/WDL/WGS/ArCCH_WGS.wdl) has been written with [inputs](https://github.com/kbolton-lab/ArCH/blob/main/WDL/WGS/ArCCH_WGS.json) being simply the VCF files produced from Mutect2 and VarDict, sample phenotype information, and the local database filepath for the storage and maintainence of the variant database.
 
+### Installation
+
+Please use [pip](https://pip.pypa.io/en/stable/) to install `ch-toolkit`.
+
+If you want to try the latest bleeding edge, run the following command:
+
+```
+pip install git+https://github.com/kbolton-lab/ch-toolkit.git@main
+```
+
+For a stable docker image of `ch-toolkit`, please visit [Docker Hub](https://hub.docker.com/r/indraniel/ch-toolkit/tags).
+
 ### CLI
 
 ```
