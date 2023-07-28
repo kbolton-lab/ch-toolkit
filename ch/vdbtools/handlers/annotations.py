@@ -196,8 +196,8 @@ def annotate_pd_to_pd(annotate_pd, batch_number, debug):
     all_res = pd.concat(all_res, ignore_index=True)
     total = len(all_res)
     log.logit(f"Finished reading in the AnnotatePD CSV: {total} variants.")
-    res['batch'] = batch_number
-    return total, res
+    all_res['batch'] = batch_number
+    return total, all_res
 
 def insert_vep(vep, annotation_connection, variant_connection, batch_number, debug):
     window = 5_000_000
