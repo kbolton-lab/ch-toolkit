@@ -290,7 +290,7 @@ def annotate_fisher_test(pileup_db, caller_db, caller, batch_number, debug):
     log.logit(f"Performing the Fisher's Exact Test on the variants inside {caller_db} for batch: {batch_number}")
     caller = "mutect" if caller.lower() == "mutect" else "vardict"
     caller_connection = db.duckdb_connect_rw(caller_db, False)
-    log.logit(f"Finding all variants within {caller_db} that does not have the fisher's exact test p-value calcualted for batch: {batch_number}")
+    log.logit(f"Finding all variants within {caller_db} that does not have the fisher's exact test p-value calculated for batch: {batch_number}")
     caller_connection.execute(f"ATTACH '{pileup_db}' as pileup")
     sql = f'''
         SELECT c.variant_id, c.sample_id, v.PoN_RefDepth, v.PoN_AltDepth, c.format_ref_fwd, c.format_ref_rev, c.format_alt_fwd, c.format_alt_rev,

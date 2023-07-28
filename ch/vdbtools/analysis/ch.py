@@ -24,7 +24,6 @@ def dump_ch_variants(mutect_db, vardict_db, annotation_db, debug):
     LEFT JOIN annotation_db.vep as vep
     ON p.variant_id = vep.variant_id
     WHERE (
-        (max_gnomAD_AF_VEP < 0.005 OR max_gnomAD_AF_VEP is NULL) AND
         (max_gnomADe_AF_VEP < 0.005 OR max_gnomADe_AF_VEP is NULL) AND
         (max_gnomADg_AF_VEP < 0.005 OR max_gnomADg_AF_VEP is NULL) AND
         (max_pop_gnomAD_AF < 0.0005 OR max_pop_gnomAD_AF is NULL)
@@ -94,6 +93,7 @@ def dump_ch_variants(mutect_db, vardict_db, annotation_db, debug):
     log.logit(f"{length} variants are putative drivers")
     return df
 
+#        (max_gnomAD_AF_VEP < 0.005 OR max_gnomAD_AF_VEP is NULL) AND
 #SELECT max_gnomAD_AF_VEP, max_gnomADe_AF_VEP, max_gnomADg_AF_VEP, max_pop_gnomAD_AF, "n.loci.vep" FROM a.vep WHERE key = 'chr22:28710060:C:T';
 #SELECT CosmicCount, myeloid_cosmic_count, heme_cosmic_count, isTruncatingHotSpot FROM a.pd WHERE key = 'chr22:28710060:C:T';
 #SELECT mutect_filter, pon_2at2_percent, format_af, format_alt_fwd, format_alt_rev FROM mutect WHERE key = 'chr22:28710060:C:T';
