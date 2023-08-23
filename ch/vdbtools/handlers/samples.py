@@ -32,6 +32,7 @@ def insert_samples(samples_file, sample_duckdb, batch_number, debug, clobber):
         if sample == s:
             log.logit(f"WARNING: {sample} already exists in {sample_duckdb}.", color="yellow")
             res = res[res['sample_name'] != sample]
+            res = res.reset_index(drop=True)
     sample_id = 1 if sample_id is None else sample_id + 1
     df = pd.concat([pd.Series(list(range(sample_id, len(res)+sample_id))), res], axis=1).rename(columns={0: "sample_id"})
     df['batch'] = batch_number

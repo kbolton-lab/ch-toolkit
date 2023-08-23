@@ -152,6 +152,28 @@ def dump_variant_batch(variant_db, header, batch_number, chromosome, debug):
     log.logit(f"Finished dumping variants into VCF file")
     log.logit(f"All Done!", color="green")
 
+def dump_variants_pileup(variant_db, pileup_db, header, batch_number, chromosome, debug):
+    if chromosome is None:
+        log.logit(f"Dumping batch: {batch_number} variants from: {variant_db} into a VCF file that needs pileup", color="green")
+    else:
+        log.logit(f"Dumping batch: {batch_number} and chromosome: {chromosome} variants from: {variant_db} into a VCF file that needs pileup", color="green")
+    variant_connection = db.duckdb_connect(variant_db)
+    variant_connection.execute(f"ATTACH \'{pileup_db}\' as pileup")
+    sql = f"""
+        SELECT variant_id, chrom, pos, ref, alt 
+        FROM variants 
+        WHERE batch = {batch_number} AND 
+        variants.key NOT IN (
+            SELECT key
+            FROM pileup.pileup
+        )
+    """
+    variants = variant_connection.sql(sql)
+    vcf.variants_to_vcf(variants, header, batch_number, chromosome, debug)
+    variant_connection.close()
+    log.logit(f"Finished dumping variants that need pileup into VCF file")
+    log.logit(f"All Done!", color="green")
+
 def import_pon_pileup(pileup_db, variant_db, pon_pileup, batch_number, debug, clobber):
     log.logit(f"Adding pileup from batch: {batch_number} into {pileup_db}", color="green")
     pileup_connection = db.duckdb_connect_rw(pileup_db, clobber)

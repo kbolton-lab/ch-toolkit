@@ -12,6 +12,7 @@ import ch.utils.database as db
 # - Mutect Strand Alt >= 1 OR Vardict Strand Alt >= 1   DONE
 # - Mutect Min Alt >= 2 OR Vardict Min Alt >= 2         DONE
 # - Calculate MedianVAF
+# - n Samples
 
 def dump_ch_variants(mutect_db, vardict_db, annotation_db, debug):
     connection = db.duckdb_connect_rw(mutect_db, False)

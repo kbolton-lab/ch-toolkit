@@ -2,6 +2,8 @@
 
         # do some work...
         git commit             # commit things into the repository
+        # Ensure updating version.py
+        vim version.py
         git tag -a v2.2.1      # make a tag on that commit v<version-number>
         git push origin        # push all the commits to github
         git push origin --tags # push all the tags to github

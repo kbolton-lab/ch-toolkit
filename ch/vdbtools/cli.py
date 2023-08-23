@@ -110,6 +110,23 @@ def dump_variants(variant_db, header_type, batch_number, chromosome, debug):
     dump.dump_variant_batch(variant_db, header_type, batch_number, chromosome, debug)
     log.logit(f"---> Successfully dumped variant batch ({batch_number}) from {variant_db}", color="green")
 
+# TODO: Write a dump-pileup command to specifically query the pileup and the variants file for variants without any pileup data
+@cli.command('dump-variants-pileup', short_help="dumps all variants inside duckdb into a VCF file that needs pileup")
+@click.option('--vdb', 'variant_db', type=click.Path(exists=True), required=True, help="The duckdb database to dump the variants from")
+@click.option('--pdb', 'pileup_db', type=click.Path(exists=True), required=True, help="The pileup database to check which variants need pileup")
+@click.option('--header-type', '-t', type=click.Choice(['simple', 'dummy'], case_sensitive=False), required=True, default="dummy",
+                                    help="A pre-existing header type e.g. simple, mutect, vardict, complex, etc.")
+@click.option('--batch-number', '-b', type=click.INT, required=True, help="The batch number of this variant set")
+@click.option('--chromosome', '-c', type=click.STRING, default=None, help="The chromosome set of interest")
+@click.option('--debug', '-d', is_flag=True, show_default=True, default=False, required=True, help="Print extra debugging output")
+def dump_variants(variant_db, pileup_db, header_type, batch_number, chromosome, debug):
+    """
+    Dumps the variants from duckdb into a VCF file
+    """
+    import ch.vdbtools.dump as dump
+    dump.dump_variants_for_pileup(variant_db, pileup_db, header_type, batch_number, chromosome, debug)
+    log.logit(f"---> Successfully dumped variant batch ({batch_number}) from {variant_db} that needs pileup", color="green")
+
 @cli.command('import-pon-pileup', short_help="updates variants inside duckdb with PoN pileup information")
 @click.option('--vdb', 'variant_db', type=click.Path(exists=True), required=True, help="The duckdb database to fetch variant ID from")
 @click.option('--pdb', 'pileup_db', type=click.Path(), required=True, help="The duckdb database to fetch variant ID from")
