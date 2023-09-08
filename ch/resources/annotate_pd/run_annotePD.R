@@ -21,17 +21,12 @@ message("Finished reading file.")
 # Protected files, rarely changes
 {
   TRUNCATING <- "/storage1/fs1/bolton/Active/Protected/Annotation_Files/BB.truncating.more.than.1.tsv"
-  BLACKLIST <- "/storage1/fs1/bolton/Active/Protected/Annotation_Files/ENCFF356LFX.bed"
-  SEGEMENTAL_DUPLICATIONS <- "/storage1/fs1/bolton/Active/Protected/Annotation_Files/dup.grch38.bed.gz"
-  SIMPLE_REPEATS <- "/storage1/fs1/bolton/Active/Protected/Annotation_Files/simpleRepeat.bed"
-  REPEAT_MASKER <- "/storage1/fs1/bolton/Active/Protected/Annotation_Files/repeatMaskerJoinedCurrent.bed"
   BOLTON_BICK_VARS <- "/storage1/fs1/bolton/Active/Protected/Annotation_Files/bick.bolton.vars3.txt"
   MUT2_BICK <- "/storage1/fs1/bolton/Active/Protected/Annotation_Files/topmed.n2.mutation.c.p.txt"
   MUT2_KELLY <- "/storage1/fs1/bolton/Active/Protected/Annotation_Files/kelly.n2.mutation.c.p.txt"
   MATCHES2 <- "/storage1/fs1/bolton/Active/Protected/Annotation_Files/matches.2.c.p.txt"
   GENE_LIST <- "/storage1/fs1/bolton/Active/Protected/Annotation_Files/oncoKB_CGC_pd_table_disparity_KB_BW.csv"
 }
-HOTSPOT_PON <- "/storage1/fs1/bolton/Active/Users/DucTran/UkbbVar/Data/hotspot.PON2.tsv"
 ONCO_KB_AVAILABLE_GENE <- "/storage1/fs1/bolton/Active/Users/DucTran/UkbbVar/Data/oncoKbCancerGeneList.tsv"
 
 # Load all support data
@@ -53,11 +48,6 @@ ONCO_KB_AVAILABLE_GENE <- "/storage1/fs1/bolton/Active/Users/DucTran/UkbbVar/Dat
   supportData[["kelly.mutation.2"]] <- fread(MUT2_KELLY, sep = "\t", header = T, data.table = FALSE)
   supportData[["matches.2.c.p"]] <- fread(MATCHES2, sep = "\t", header = T, data.table = FALSE)
   supportData[["vars"]] <- fread(BOLTON_BICK_VARS, sep = "\t", header = T, data.table = FALSE)
-  
-  supportData[["blacklist"]] <- readBed(BLACKLIST)
-  supportData[["dups"]] <- readBed(SEGEMENTAL_DUPLICATIONS)
-  supportData[["repeats"]] <- readBed(SIMPLE_REPEATS)
-  supportData[["repeatMasker"]] <- readBed(REPEAT_MASKER)
   
   supportData[["vars.truncating"]] <- fread(TRUNCATING, sep = "\t", header = T, data.table = FALSE)
   supportData[["gene_list"]] <- fread(GENE_LIST, sep = ",", header = T, data.table = FALSE)
