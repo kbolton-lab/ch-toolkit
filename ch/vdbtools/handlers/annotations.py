@@ -7,9 +7,7 @@ import ch.vdbtools.handlers.variants as variants
 import ch.utils.logger as log
 import ch.utils.database as db
 from clint.textui import indent
-
-ANNOTATION_FILES="/storage1/fs1/bolton/Active/Protected/Annotation_Files/"
-BOLTON_BICK_VARS="bick.bolton.vars3.txt"
+import importlib.resources
 
 def load_df_file_into_annotation(connection, df, table, debug):
     sql = f"""
@@ -76,7 +74,7 @@ def prepareAnnotatePdData(df, vars, debug):
     vars['gene_aachange'] = vars['SYMBOL_VEP']+"_"+vars['AAchange2']
     vars['gene_cDNAchange'] = vars['SYMBOL_VEP']+"_"+vars['HGVSc_VEP'].str.extract(r'(.*:)(.*)')[1]
 
-    log.logit(f"Merging information from {BOLTON_BICK_VARS}.", color="yellow")
+    log.logit(f"Merging information from bick.bolton.vars3.txt", color="yellow")
     with indent(4, quote=' >'):
         dims = len(df)
         df_tmp = df[(df['key'].isin(vars['key'])) | (df['gene_loci'].isin(vars['gene_loci_vep'].dropna())) | (df['gene_aachange'].isin(vars['gene_aachange'].dropna())) | (df['gene_cDNAchange'].isin(vars['gene_cDNAchange'].dropna()))]
@@ -145,7 +143,7 @@ def prepareAnnotatePdData(df, vars, debug):
 
         df_tmp = df_tmp[['key', 'n.loci.vep', 'source.totals.loci', 'n.loci.truncating.vep', 'source.totals.loci.truncating', 'n.HGVSp', 'source.totals.p', 'n.HGVSc', 'source.totals.c']]
         #df_tmp.drop(['gene_loci', 'gene_aachange', 'gene_cDNAchange'], axis=1, inplace=True)
-        log.logit(f"Summarizing information from {BOLTON_BICK_VARS}.", color="yellow")
+        log.logit(f"Summarizing information from bick.bolton.vars3.txt", color="yellow")
         df = pd.merge(df, df_tmp, on=['key'], how='left')
 
         if len(df) != dims: log.logit(f"ERROR: Something went wrong in the join. Dimensions don't match!", color="red")
@@ -155,7 +153,8 @@ def prepareAnnotatePdData(df, vars, debug):
 
 def preprocess(df, debug):
     log.logit(f"Performing some preprocessing to prepare for AnnotatePD")
-    vars = pd.read_csv(ANNOTATION_FILES+BOLTON_BICK_VARS, sep='\t')
+    bolton_bick_vars = importlib.resources.files('ch.resources.annotate_pd').joinpath('bick.bolton.vars3.txt')
+    vars = pd.read_csv(bolton_bick_vars, sep='\t')
     df = annotateGnomad(df, debug)
     df = prepareAnnotatePdData(df, vars, debug)
     return df
