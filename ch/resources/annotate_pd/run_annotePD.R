@@ -76,4 +76,4 @@ annotation <- annotatePD(df, supportData)
 df <- left_join(df, annotation, by = c("CHROM", "POS", "REF", "ALT"))
 message("Finished AnnotatePD")
 
-write.csv(df, "annotatePD_results.csv", row.names = FALSE)
+write.csv(df, args[2], row.names = FALSE)
