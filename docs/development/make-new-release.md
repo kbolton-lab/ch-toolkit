@@ -20,7 +20,7 @@ Given a version number MAJOR.MINOR.PATCH, increment the:
     
         cd docker-toolkit/           # After cloning repo: https://github.com/kbolton-lab/docker-toolkit
         cd ch-toolkit/
-        vim -p Dockerfile README.md  # change things to the latest "tag" version
+        vim -p Dockerfile README.md  # change things to the latest "tag" version ... switch using gt or gT
         docker images
         docker build -t ch-toolkit:v2.2.1 .
         docker run -i -t --rm ch-toolkit:v2.2.1 /bin/bash
