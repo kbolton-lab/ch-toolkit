@@ -47,11 +47,11 @@ def merge_variants_tables(db_path, connection, batch_number, debug):
             sql = f"""
                 INSERT INTO variants SELECT s.*
                 FROM sample_{i}.variants s
-                WHERE s.key NOT IN (
-                    SELECT key
+                WHERE s.variant_id NOT IN (
+                    SELECT variant_id
                     FROM variants v
-                    WHERE v.key IN (
-                        SELECT key
+                    WHERE v.variant_id IN (
+                        SELECT variant_id
                         FROM sample_{i}.variants
                     )
                 )
@@ -107,7 +107,8 @@ def insert_variant_id_into_db(db, table, variant_db, debug):
         UPDATE {table}
         SET variant_id = v.variant_id
         FROM v.variants v
-        WHERE {table}.key = v.key;
+        WHERE {table}.key = v.key
+        AND {table}.variant_id is NULL;
     """
     if debug: log.logit(f"Executing: {sql}")
     db.execute(sql)
@@ -169,6 +170,7 @@ def dump_variants_pileup(variant_db, pileup_db, header, batch_number, chromosome
         )
     """
     variants = variant_connection.sql(sql)
+    variant_connection.execute(f"DETACH pileup")
     vcf.variants_to_vcf(variants, header, batch_number, chromosome, debug)
     variant_connection.close()
     log.logit(f"Finished dumping variants that need pileup into VCF file")

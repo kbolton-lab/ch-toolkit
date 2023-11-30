@@ -278,8 +278,6 @@ def determine_pathogenicity(df, total_samples, debug):
         ((df['Review'] != "No Review") & (df['REF'].str.len() > 5) | (df['ALT'].str.len() > 5), ";Long INDEL"),
         ((df['Review'] == "No Review") & (df['REF'].str.len() >= 2) & (df['ALT'].str.len() >= 2), "Complex INDEL"),
         ((df['Review'] != "No Review") & (df['REF'].str.len() >= 2) & (df['ALT'].str.len() >= 2), ";Complex INDEL"),
-        ((df['Review'] == "No Review") & (df['Consequence'] == "splice_region_variant,synonymous_variant"), "Splice Region Variant"),
-        ((df['Review'] != "No Review") & (df['Consequence'] == "splice_region_variant,synonymous_variant"), ";Splice Region Variant"),
         ((df['Review'] == "No Review") & (df['average_af'] >= 0.2), "High VAF"),
         ((df['Review'] != "No Review") & (df['average_af'] >= 0.2), ";High VAF"),
         ((df['Review'] == "No Review") & (df['Gene'].isin(gene_list)) & (df['VariantClass'].isin(missense_mutation)) & (df['homopolymerCase'] != ""), "Homopolymer Region"),
@@ -361,15 +359,15 @@ def determine_pathogenicity(df, total_samples, debug):
 # - PASS Mutect + PASS Vardict
 # - IF Mutect Filter == weak_evidence | strand_bias + HOTSPOT DEFINITION THEN PASS
 # - Pass PoN2at2%
-# - Pass Strand Bias 90/10
 # - Pass Min VAF of 0.1%
 # - max(mutect_vaf, vardict_vaf) >= 0.02
 # - Mutect Min Alt >= 2 OR Vardict Min Alt >= 2
 # - Mutect 1 AltCount on Fwd + Rev OR Vardict 1 AltCount on Fwd + Rev
 # - Average VAF <= 0.25 OR ELSE B/B >= 5 OR ELSE CosmicCount >= 25
 # - Save Nonsense Mutations in DTAP
-# - Median VAF <= 0.35 if Average VAF > 0.25 (At least 2 Samples)
+# - Median VAF <= 0.35 if Average VAF > 0.25 (At least 2 Samples) <- For Tumors add the B/B and COSMIC
 # - Calculate N Samples
+# - PoN Edge Case of 0
 def ch_to_df(mutect_connection, vardict_db, annotation_db, debug):
     log.logit(f"Grabbing CH Variants from Database...")
     mutect_connection.execute(f"ATTACH \'{vardict_db}\' as vardict_db")
@@ -411,10 +409,6 @@ def ch_to_df(mutect_connection, vardict_db, annotation_db, debug):
             )
         ) AND
             pon_2at2_percent is NULL AND
-            NOT (
-                (format_alt_fwd / (format_alt_fwd + format_alt_rev)) > 0.9 OR (format_alt_fwd / (format_alt_fwd + format_alt_rev)) < 0.1 AND
-                (format_alt_rev / (format_alt_fwd + format_alt_rev)) > 0.9 OR (format_alt_rev / (format_alt_fwd + format_alt_rev))
-            ) AND
             format_af >= 0.001 AND
             mutect.variant_id IN (
                 SELECT variant_id
@@ -428,10 +422,6 @@ def ch_to_df(mutect_connection, vardict_db, annotation_db, debug):
     WHERE (
         vardict_filter = '[PASS]' AND
         pon_2at2_percent is NULL AND
-        NOT (
-                (format_alt_fwd / (format_alt_fwd + format_alt_rev)) > 0.9 OR (format_alt_fwd / (format_alt_fwd + format_alt_rev)) < 0.1 AND
-                (format_alt_rev / (format_alt_fwd + format_alt_rev)) > 0.9 OR (format_alt_rev / (format_alt_fwd + format_alt_rev))
-            ) AND
         format_af >= 0.001 AND
         variant_id IN (
             SELECT variant_id
@@ -482,6 +472,11 @@ def ch_to_df(mutect_connection, vardict_db, annotation_db, debug):
     """
     #COPY () TO 'ch_pd.csv' (HEADER, DELIMITER ',');
     #AND fisher_p_value <= 1.260958e-09
+    # NOT (
+    #     (format_alt_fwd / (format_alt_fwd + format_alt_rev)) > 0.9 OR (format_alt_fwd / (format_alt_fwd + format_alt_rev)) < 0.1 AND
+    #     (format_alt_rev / (format_alt_fwd + format_alt_rev)) > 0.9 OR (format_alt_rev / (format_alt_fwd + format_alt_rev))
+    # )
+
     if debug: log.logit(f"Executing: {sql}")
     df = mutect_connection.execute(sql).df()
     mutect_connection.execute(f"DROP VIEW pd_filtered; DROP VIEW mutect_filtered; DROP VIEW vardict_filtered; DROP VIEW n_samples_and_median_af; DROP VIEW ch_pd")
