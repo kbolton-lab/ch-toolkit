@@ -209,9 +209,9 @@ def insert_mutect_caller(db_path, input_vcf, batch_number, clobber, debug):
     setup_caller_tbl(caller_connection, "mutect")
     vcf.duckdb_load_df_file(caller_connection, df, "mutect")
     #! Write out parquet file
-    parquetPath = db_path.replace(".db", ".parquet")
-    cmd = f"COPY mutect TO '{parquetPath}' (FORMAT 'parquet')"
-    caller_connection.execute(cmd)
+    #parquetPath = db_path.replace(".db", ".parquet")
+    #cmd = f"COPY mutect TO '{parquetPath}' (FORMAT 'parquet')"
+    #caller_connection.execute(cmd)
     caller_connection.close()
     log.logit(f"Finished inserting mutect variants")
     log.logit(f"Variants Processed - Total: {counts}", color="green")
@@ -244,9 +244,9 @@ def insert_vardict_caller(db_path, input_vcf, batch_number, clobber, debug):
     setup_caller_tbl(caller_connection, "vardict")
     vcf.duckdb_load_df_file(caller_connection, df, "vardict")
     #! Write out parquet file
-    parquetPath = db_path.replace(".db", ".parquet")
-    cmd = f"COPY vardict TO '{parquetPath}' (FORMAT 'parquet')"
-    caller_connection.execute(cmd)
+    #parquetPath = db_path.replace(".db", ".parquet")
+    #cmd = f"COPY vardict TO '{parquetPath}' (FORMAT 'parquet')"
+    #caller_connection.execute(cmd)
     caller_connection.close()
     log.logit(f"Finished inserting vardict variants")
     log.logit(f"Variants Processed - Total: {counts}", color="green")
@@ -327,7 +327,7 @@ def merge_caller_tables(db_path, caller_connection, variant_db, sample_db, batch
     caller_connection.execute(sql)
     sample_ids = caller_connection.df()["sample_id"].tolist()
 
-    # Create no_check and check merge folders within the db_path
+    # Create no_check and check merge folders withiøn the db_path
     check_folder = f"{db_path}/check/"
     os.makedirs(check_folder, exist_ok=True)
     check_count = 0
@@ -345,25 +345,24 @@ def merge_caller_tables(db_path, caller_connection, variant_db, sample_db, batch
             samples.insert_sample_id_into_db(sample_caller_connection, caller, sample_db, debug)
             log.logit(f"Adding Variant IDs to the {caller} variants")
             variants.insert_variant_id_into_db(sample_caller_connection, caller, variant_db, debug)
-            # Write a DuckDB table back to a Parquet file
-            parquetPath = file.replace(".db", ".parquet")
-            sample_caller_connection.execute(f"COPY {caller} TO '{parquetPath}' (FORMAT 'parquet')")
             sample_id = sample_caller_connection.execute(f"SELECT DISTINCT sample_id FROM {caller}").df()["sample_id"].tolist()[0]
-            sample_caller_connection.close()
 
             if sample_id in sample_ids:
                 # Create link to safe folder
                 log.logit(f"Sample {sample_id} already exists in {caller}, need check")
-                #os.symlink(file, f"{check_folder}{os.path.basename(file)}")
-                shutil.move(parquetPath, f"{check_folder}{os.path.basename(parquetPath)}")
+                # Write a DuckDB table back to a Parquet file
+                parquetPath = check_folder + os.basename(file).replace(".db", ".parquet")
+                sample_caller_connection.execute(f"COPY {caller} TO '{parquetPath}' (FORMAT 'parquet')") 
                 check_count += 1
             else:
                 # Create link to unsafe folder
                 log.logit(f"Sample {sample_id} does not exist in {caller}, no check")
-                #os.symlink(file, f"{no_check_folder}{os.path.basename(file)}")
-                shutil.move(parquetPath, f"{no_check_folder}{os.path.basename(parquetPath)}")
+                # Write a DuckDB table back to a Parquet file
+                parquetPath = no_check_folder + os.basename(file).replace(".db", ".parquet")
+                sample_caller_connection.execute(f"COPY {caller} TO '{parquetPath}' (FORMAT 'parquet')")
                 no_check_count += 1
                 sample_ids.append(sample_id)
+            sample_caller_connection.close()
     log.logit(f"Finished creating check and no_check folders, check: {check_count}, no_check: {no_check_count}")
 
     # Insert no_check folder
@@ -372,6 +371,23 @@ def merge_caller_tables(db_path, caller_connection, variant_db, sample_db, batch
         sql = f"INSERT INTO {caller} SELECT * FROM read_parquet('{no_check_folder}*.parquet')"
         caller_connection.execute(sql)
 
+    for i, file in enumerate(glob.glob(check_folder + "*.parquet")):
+        log.logit(f"Using safe merge for file number: {i} - {file}")
+        sql = f"""
+            SELECT DISTINCT sample_id
+            FROM read_parquet('{file}')
+        """
+        sample_id = caller_connection.execute(sql).df()["sample_id"].tolist()[0]       
+        sql = f"""
+            INSERT INTO {caller} 
+            SELECT * FROM read_parquet('{file}') 
+            WHERE variant_id NOT IN (
+                SELECT c.variant_id 
+                FROM {caller} c 
+                WHERE c.sample_id = '{sample_id}'
+            )
+        """
+        caller_connection.execute(sql)
 
     total = caller_connection.execute(f"SELECT COUNT(*) FROM {caller}").fetchall()[0][0]
     caller_connection.close()
