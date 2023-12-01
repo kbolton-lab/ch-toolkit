@@ -1,4 +1,4 @@
-import os, glob
+import os, glob, shutil
 import duckdb
 import pandas as pd
 
@@ -208,6 +208,10 @@ def insert_mutect_caller(db_path, input_vcf, batch_number, clobber, debug):
     caller_connection = db.duckdb_connect_rw(db_path, clobber)
     setup_caller_tbl(caller_connection, "mutect")
     vcf.duckdb_load_df_file(caller_connection, df, "mutect")
+    #! Write out parquet file
+    parquetPath = db_path.replace(".db", ".parquet")
+    cmd = f"COPY mutect TO '{parquetPath}' (FORMAT 'parquet')"
+    caller_connection.execute(cmd)
     caller_connection.close()
     log.logit(f"Finished inserting mutect variants")
     log.logit(f"Variants Processed - Total: {counts}", color="green")
@@ -239,13 +243,27 @@ def insert_vardict_caller(db_path, input_vcf, batch_number, clobber, debug):
     caller_connection = db.duckdb_connect_rw(db_path, clobber)
     setup_caller_tbl(caller_connection, "vardict")
     vcf.duckdb_load_df_file(caller_connection, df, "vardict")
+    #! Write out parquet file
+    parquetPath = db_path.replace(".db", ".parquet")
+    cmd = f"COPY vardict TO '{parquetPath}' (FORMAT 'parquet')"
+    caller_connection.execute(cmd)
     caller_connection.close()
     log.logit(f"Finished inserting vardict variants")
     log.logit(f"Variants Processed - Total: {counts}", color="green")
     log.logit(f"All Done!", color="green")
 
+# This is the merging using *.db - For merging using *.parquet, see below
 def merge_caller_tables(db_path, caller_connection, variant_db, sample_db, batch_number, caller, debug):
     log.logit(f'Merging Sample Callers from {db_path}')
+
+    # Getting all sample names from the caller table
+    sql = f"""
+        SELECT DISTINCT sample_id
+        FROM {caller}
+    """
+    caller_connection.execute(sql)
+    sample_ids = caller_connection.df()["sample_id"].tolist()
+
     with indent(4, quote=' >'):
         for i, file in enumerate(glob.glob(db_path + "/" + "*.db")):
             sample_name = os.path.basename(file).split('.')[1]
@@ -259,23 +277,122 @@ def merge_caller_tables(db_path, caller_connection, variant_db, sample_db, batch
             log.logit(f"Merging: {i} - {file}")
             caller_connection.execute(f"ATTACH \'{file}\' as sample_{i}")
             if debug: log.logit(f"Attached {file} as sample_{i}")
+
+            # Getting Sample Name from Sample_VCF
             sql = f"""
-                INSERT INTO {caller} SELECT s.*
-                FROM sample_{i}.{caller} s
-                WHERE (s.key, s.sample_name) NOT IN (
-                    SELECT (key, sample_name)
-                    FROM {caller} c
-                    WHERE (c.key, c.sample_name) IN (
-                        SELECT (key, sample_name)
-                        FROM sample_{i}.{caller}
-                    )
-                )
+                SELECT sample_id
+                FROM sample_{i}.{caller}
+                LIMIT 1
             """
+            caller_connection.execute(sql)
+            sample_id = caller_connection.df().iloc[0, 0]
+
+            # If the sample exists, then we need to check for repeating variant_id and sample_id
+            # If it doesn't exist, we can just import the information directly without checking.
+            if sample_id in sample_ids:
+                log.logit(f"Sample {sample_id} already exists in {caller}, using safe merge")
+                sql = f"""
+                    INSERT INTO {caller} SELECT s.*
+                    FROM sample_{i}.{caller} s
+                    WHERE s.variant_id NOT IN (
+                        SELECT variant_id
+                        FROM {caller} c
+                        WHERE c.sample_id = '{sample_id}'
+                    )
+                """
+            else:
+                log.logit(f"Sample {sample_id} does not exist in {caller}, using unsafe merge")
+                sql = f"""
+                    INSERT INTO {caller} SELECT *
+                    FROM sample_{i}.{caller}
+                """
+                sample_ids.append(sample_id)
             if debug: log.logit(f"Executing: {sql}")
             caller_connection.sql(sql)
             caller_connection.execute(f"DETACH sample_{i}")
             if debug: log.logit(f"SQL Complete")
     log.logit(f"Finished merging all tables from: {db_path}")
+
+#def put_parquet_file_into_db_with_id_check(db_folder, db_name, parquet_folder, clobber):
+def merge_caller_tables(db_path, caller_connection, variant_db, sample_db, batch_number, caller, debug):
+    # Setting memory_limit
+    sql = "PRAGMA memory_limit='16GB'"
+    caller_connection.execute(sql)
+
+    # Getting all sample names from the caller table
+    sql = f"""
+        SELECT DISTINCT sample_id
+        FROM {caller}
+    """
+    caller_connection.execute(sql)
+    sample_ids = caller_connection.df()["sample_id"].tolist()
+
+    # Create no_check and check merge folders within the db_path
+    check_folder = f"{db_path}/check/"
+    os.makedirs(check_folder, exist_ok=True)
+    check_count = 0
+    no_check_folder = f"{db_path}/no_check/"
+    os.makedirs(no_check_folder, exist_ok=True)
+    no_check_count = 0
+
+    # Prior to importing all parquet files, we need to insert variant_id and sample_id
+    log.logit(f"Creating temporary DuckDB to insert variant_id and sample_id into parquet files")
+    with indent(4, quote=' >'):
+        for i, file in enumerate(glob.glob(db_path + "/" + "*.parquet")):
+            log.logit(f"Processing {file}")
+            # Create a temporary db to add variant_id and sample_id
+            tmp_connection = db.duckdb_connect_rw('tmp.db', True)
+            # Read a Parquet file into a DuckDB table
+            tmp_connection.execute(f"CREATE TABLE {caller} AS SELECT * FROM read_parquet('{file}')")
+            log.logit(f"Adding Sample IDs to {caller} database")
+            samples.insert_sample_id_into_db(tmp_connection, caller, sample_db, debug)
+            log.logit(f"Adding Variant IDs to the {caller} variants")
+            variants.insert_variant_id_into_db(tmp_connection, caller, variant_db, debug)
+            # Write a DuckDB table back to a Parquet file
+            tmp_connection.execute(f"COPY {caller} TO '{file}' (FORMAT 'parquet')")
+            sample_id = tmp_connection.execute(f"SELECT DISTINCT sample_id FROM {caller}").df()["sample_id"].tolist()[0]
+            tmp_connection.close()
+
+            if sample_id in sample_ids:
+                # Create link to safe folder
+                log.logit(f"Sample {sample_id} already exists in {caller}, need check")
+                os.symlink(file, f"{check_folder}{os.path.basename(file)}")
+                check_count += 1
+            else:
+                # Create link to unsafe folder
+                log.logit(f"Sample {sample_id} does not exist in {caller}, no check")
+                os.symlink(file, f"{no_check_folder}{os.path.basename(file)}")
+                no_check_count += 1
+                sample_ids.append(sample_id)
+    log.logit(f"Finished creating check and no_check folders, check: {check_count}, no_check: {no_check_count}")
+
+    # Insert no_check folder
+    if no_check_count > 0:
+        log.logit(f"Inserting {no_check_count} files into {caller}")
+        sql = f"INSERT INTO {caller} SELECT * FROM read_parquet('{no_check_folder}*.parquet')"
+        caller_connection.execute(sql)
+
+    for i, file in enumerate(glob.glob(check_folder + "*.parquet")):
+        log.logit(f"Using safe merge for file number: {i} - {file}")
+        sql = f"""
+            SELECT DISTINCT sample_id
+            FROM read_parquet('{file}')
+        """
+        sample_id = caller_connection.execute(sql).df()["sample_id"].tolist()[0]
+        sql = f"""
+            INSERT INTO {caller} 
+            SELECT * FROM read_parquet('{file}') 
+            WHERE variant_id NOT IN (
+                SELECT m.variant_id FROM {caller} m WHERE m.sample_id = '{sample_id}'
+            )
+        """
+        caller_connection.execute(sql)
+    total = caller_connection.execute(f"SELECT COUNT(*) FROM {caller}").fetchall()[0][0]
+    caller_connection.close()
+    # Remove check and no_check folders
+    shutil.rmtree(check_folder)
+    shutil.rmtree(no_check_folder)
+    log.logit(f"Finished inserting {caller} variants, total: {total}")
 
 def insert_caller_batch(db_path, caller_db, variant_db, sample_db, caller, batch_number, debug, clobber):
     log.logit(f"Inserting variants from batch: {batch_number} into {caller_db}", color="green")
