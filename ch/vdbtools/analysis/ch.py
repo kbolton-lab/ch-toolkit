@@ -59,10 +59,12 @@ def near_BB_loci_HS(df_row, vars):
         # If the AA change is Terminating, we only want to select the Near Hotspots that are ALSO Terminating, or else it's comparing Apples to Oranges
         if 'Ter' in df_row['gene_aachange']:
             res = res[res['truncating'] == 'truncating']
-            return res.apply(lambda row: f"{row['gene_loci_vep']}: {row['n.loci.truncating.vep']}", axis=1).str.cat(sep=' | ')
+            return res.apply(lambda row: f"{row['gene_loci_vep']}: {row['n.loci.truncating.vep'].astype(str)}", axis=1).str.cat(sep=' | ')
+            #return res.apply(lambda row: f"{row['gene_loci_vep']}: {row['n.loci.truncating.vep']}", axis=1).str.cat(sep=' | ')
         else:
             res = res[res['truncating'] == 'not']
-            return res.apply(lambda row: f"{row['gene_loci_vep']}: {row['n.loci.truncating.vep']}", axis=1).str.cat(sep=' | ')
+            return res.apply(lambda row: f"{row['gene_loci_vep']}: {row['n.loci.truncating.vep'].astype(str)}", axis=1).str.cat(sep=' | ')
+            #return res.apply(lambda row: f"{row['gene_loci_vep']}: {row['n.loci.truncating.vep']}", axis=1).str.cat(sep=' | ')
     # Else check nucleotide if none of the AA positions are true...
     elif any(any_in_n):
         res = vars[vars['CHROM.POS'].isin(vector_n)][['gene_loci_vep', 'n.HGVSc', 'gene_cDNAchange']].drop_duplicates()
