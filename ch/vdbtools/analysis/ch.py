@@ -1,4 +1,4 @@
-import sys
+import sys, os
 import math
 import duckdb
 import pandas as pd
@@ -6,6 +6,7 @@ import ch.utils.logger as log
 import ch.utils.database as db
 import importlib.resources
 import numpy as np
+from clint.textui import indent
 
 def load_flat_databases():
     bolton_bick_vars = importlib.resources.files('ch.resources.annotate_pd').joinpath('bick.bolton.vars3.txt')
@@ -59,12 +60,10 @@ def near_BB_loci_HS(df_row, vars):
         # If the AA change is Terminating, we only want to select the Near Hotspots that are ALSO Terminating, or else it's comparing Apples to Oranges
         if 'Ter' in df_row['gene_aachange']:
             res = res[res['truncating'] == 'truncating']
-            return res.apply(lambda row: f"{row['gene_loci_vep']}: {str(row['n.loci.truncating.vep'])}", axis=1).str.cat(sep=' | ')
-            #return res.apply(lambda row: f"{row['gene_loci_vep']}: {row['n.loci.truncating.vep']}", axis=1).str.cat(sep=' | ')
+            return res.apply(lambda row: f"{row['gene_loci_vep']}: {row['n.loci.truncating.vep']}", axis=1).str.cat(sep=' | ') if not res.empty else ""
         else:
             res = res[res['truncating'] == 'not']
-            return res.apply(lambda row: f"{row['gene_loci_vep']}: {str(row['n.loci.truncating.vep'])}", axis=1).str.cat(sep=' | ')
-            #return res.apply(lambda row: f"{row['gene_loci_vep']}: {row['n.loci.truncating.vep']}", axis=1).str.cat(sep=' | ')
+            return res.apply(lambda row: f"{row['gene_loci_vep']}: {row['n.loci.truncating.vep']}", axis=1).str.cat(sep=' | ') if not res.empty else ""
     # Else check nucleotide if none of the AA positions are true...
     elif any(any_in_n):
         res = vars[vars['CHROM.POS'].isin(vector_n)][['gene_loci_vep', 'n.HGVSc', 'gene_cDNAchange']].drop_duplicates()
@@ -72,11 +71,13 @@ def near_BB_loci_HS(df_row, vars):
         if any(res['gene_cDNAchange'].str.contains('del|ins|dup')):
             res = res[res['gene_cDNAchange'].str.contains('del|ins|dup')]
             res = res.groupby(['n.HGVSc', 'gene_loci_vep']).size().reset_index(name='n')
-            return res.apply(lambda row: f"{row['gene_loci_vep']}: {row['n'].astype(str)}", axis=1).str.cat(sep=' | ')
+            return res.apply(lambda row: f"{row['gene_loci_vep']}: {row['n']}", axis=1).str.cat(sep=' | ') if not res.empty else ""
+            #return res.apply(lambda row: f"{row['gene_loci_vep']}: {row['n'].astype(str)}", axis=1).str.cat(sep=' | ') if not res.empty else ""
         else:
             res = res[~res['gene_cDNAchange'].str.contains('del|ins|dup')]
             res = res.groupby('gene_loci_vep').size().reset_index(name='n')
-            return res.apply(lambda row: f"{row['gene_loci_vep']}: {row['n'].astype(str)}", axis=1).str.cat(sep=' | ')
+            return res.apply(lambda row: f"{row['gene_loci_vep']}: {row['n']}", axis=1).str.cat(sep=' | ') if not res.empty else ""
+            #return res.apply(lambda row: f"{row['gene_loci_vep']}: {row['n'].astype(str)}", axis=1).str.cat(sep=' | ') if not res.empty else ""
     else:
         return ''
     
@@ -98,10 +99,10 @@ def near_COSMIC_loci_HS(df_row, ct):
         # If the AA change is Terminating, we only want to select the Near Hotspots that are ALSO Terminating, or else it's comparing Apples to Oranges
         if 'Ter' in df_row['gene_aachange']:
             res = res[res['truncating'] == True]
-            return res.apply(lambda row: f"{row['gene_loci_vep']}: {row['cosmic_count.loci.truncating']}, {row['heme_count.loci.truncating']}, {row['myeloid_count.loci.truncating']}", axis=1).str.cat(sep=' | ')
+            return res.apply(lambda row: f"{row['gene_loci_vep']}: {row['cosmic_count.loci.truncating']}, {row['heme_count.loci.truncating']}, {row['myeloid_count.loci.truncating']}", axis=1).str.cat(sep=' | ') if not res.empty else ""
         else:
             res = res[res['truncating'] == False]
-            return res.apply(lambda row: f"{row['gene_loci_vep']}: {row['cosmic_count.loci.truncating']}, {row['heme_count.loci.truncating']}, {row['myeloid_count.loci.truncating']}", axis=1).str.cat(sep=' | ')
+            return res.apply(lambda row: f"{row['gene_loci_vep']}: {row['cosmic_count.loci.truncating']}, {row['heme_count.loci.truncating']}, {row['myeloid_count.loci.truncating']}", axis=1).str.cat(sep=' | ') if not res.empty else ""
     # Else check nucleotide if none of the AA positions are true...
     elif any(any_in_n):
         res = ct[ct['CHROM.POS'].isin(vector_n)][['gene_loci_vep', 'cosmic_count.totals.c', 'heme_count.totals.c', 'myeloid_count.totals.c', 'gene_cDNAchange']].drop_duplicates()
@@ -110,12 +111,12 @@ def near_COSMIC_loci_HS(df_row, ct):
             res = res[res['gene_cDNAchange'].str.contains('del|ins|dup')]
             res = res.groupby('gene_loci_vep')[['cosmic_count.totals.c', 'heme_count.totals.c', 'myeloid_count.totals.c']].sum().reset_index()
             res = res[(res['cosmic_count.totals.c'] >= 25) | (res['heme_count.totals.c'] >= 10) | (res['myeloid_count.totals.c'] >= 5)]
-            return res.apply(lambda row: f"{row['gene_loci_vep']}: {row['cosmic_count.totals.c']}, {row['heme_count.totals.c']}, {row['myeloid_count.totals.c']}", axis=1).str.cat(sep=' | ')
+            return res.apply(lambda row: f"{row['gene_loci_vep']}: {row['cosmic_count.totals.c']}, {row['heme_count.totals.c']}, {row['myeloid_count.totals.c']}", axis=1).str.cat(sep=' | ') if not res.empty else ""
         else:
             res = res[~res['gene_cDNAchange'].str.contains('del|ins|dup')]
             res = res.groupby('gene_loci_vep')[['cosmic_count.totals.c', 'heme_count.totals.c', 'myeloid_count.totals.c']].sum().reset_index()
             res = res[(res['cosmic_count.totals.c'] >= 25) | (res['heme_count.totals.c'] >= 10) | (res['myeloid_count.totals.c'] >= 5)]
-            return res.apply(lambda row: f"{row['gene_loci_vep']}: {row['cosmic_count.totals.c']}, {row['heme_count.totals.c']}, {row['myeloid_count.totals.c']}", axis=1).str.cat(sep=' | ')
+            return res.apply(lambda row: f"{row['gene_loci_vep']}: {row['cosmic_count.totals.c']}, {row['heme_count.totals.c']}, {row['myeloid_count.totals.c']}", axis=1).str.cat(sep=' | ') if not res.empty else ""
     else:
         return ''
 
@@ -370,107 +371,143 @@ def determine_pathogenicity(df, total_samples, debug):
 # - Median VAF <= 0.35 if Average VAF > 0.25 (At least 2 Samples) <- For Tumors add the B/B and COSMIC
 # - Calculate N Samples
 # - PoN Edge Case of 0
-def ch_to_df(mutect_connection, vardict_db, annotation_db, debug):
-    log.logit(f"Grabbing CH Variants from Database...")
-    mutect_connection.execute(f"ATTACH \'{vardict_db}\' as vardict_db")
-    mutect_connection.execute(f"ATTACH \'{annotation_db}\' as annotation_db")
-    sql = """
-    CREATE OR REPLACE VIEW pd_filtered AS
-    SELECT *
-    FROM annotation_db.pd as p
-    LEFT JOIN annotation_db.vep as vep
-    ON p.variant_id = vep.variant_id
-    WHERE (
-        (max_gnomADe_AF_VEP < 0.005 OR max_gnomADe_AF_VEP is NULL) AND
-        (max_gnomADg_AF_VEP < 0.005 OR max_gnomADg_AF_VEP is NULL) AND
-        (max_pop_gnomAD_AF < 0.0005 OR max_pop_gnomAD_AF is NULL)
-    ) OR (vep.key = 'chr20:32434638:A:AG' OR vep.key = 'chr20:32434638:A:AGG');
-
-    CREATE OR REPLACE VIEW mutect_filtered AS
-    SELECT mutect.*
-    FROM mutect
-    LEFT JOIN pd_filtered p
-    ON mutect.variant_id = p.variant_id
-    WHERE (
-        (
-            mutect_filter = '[PASS]' OR (
-                (
-                    mutect_filter = '[weak_evidence]' OR
-                    mutect_filter = '[strand_bias]' OR
-                    mutect_filter = '[weak_evidence, strand_bias]' OR
-                    mutect_filter = '[strand_bias, weak_evidence]'
-                ) AND
-                (
-                    \"n.loci.vep\" >= 5 OR
-                    (CosmicCount >= 25 AND myeloid_cosmic_count >= 1) OR
-                    CosmicCount >= 100 OR
-                    heme_cosmic_count >= 10 OR
-                    myeloid_cosmic_count >= 5 OR
-                    (isTruncatingHotSpot == 1 AND (SYMBOL = 'DNMT3A' OR SYMBOL = 'TET2' OR SYMBOL = 'ASXL1' OR SYMBOL = 'PPM1D'))
-                ) 
-            )
-        ) AND
+def ch_to_df(temp_connection, mutect_db, vardict_db, annotation_db, debug):
+    log.logit(f"Processing variants from databases...")
+    temp_connection.execute("PRAGMA memory_limit='16GB'")
+    temp_connection.execute(f"ATTACH \'{mutect_db}\' as mutect_db (READ_ONLY)")
+    temp_connection.execute(f"ATTACH \'{vardict_db}\' as vardict_db (READ_ONLY)")
+    temp_connection.execute(f"ATTACH \'{annotation_db}\' as annotation_db (READ_ONLY)")
+    total_sample = temp_connection.execute(f"SELECT COUNT(DISTINCT sample_id) FROM mutect_db.mutect").fetchone()[0]
+    with indent(4, quote=' >'):
+        log.logit(f"Creating the pd_filtered table...")
+        sql = """
+        CREATE TABLE pd_filtered AS
+        SELECT *
+        FROM annotation_db.pd as p
+        LEFT JOIN annotation_db.vep as vep
+        ON p.variant_id = vep.variant_id
+        WHERE (
+            (max_gnomADe_AF_VEP < 0.005 OR max_gnomADe_AF_VEP is NULL) AND
+            (max_gnomADg_AF_VEP < 0.005 OR max_gnomADg_AF_VEP is NULL) AND
+            (max_pop_gnomAD_AF < 0.0005 OR max_pop_gnomAD_AF is NULL)
+        ) OR (vep.key = 'chr20:32434638:A:AG' OR vep.key = 'chr20:32434638:A:AGG');
+        """
+        if debug: log.logit(f"Executing: {sql}")
+        temp_connection.execute(sql)
+        temp_connection.execute("DETACH annotation_db;")
+        log.logit(f"Creating the mutect_filtered table...")
+        sql = """
+        CREATE TABLE mutect_filtered AS
+        SELECT *
+        FROM mutect_db.mutect as m
+        LEFT JOIN pd_filtered p
+        ON m.variant_id = p.variant_id
+        WHERE (
+            (
+                mutect_filter = '[PASS]' OR (
+                    (
+                        mutect_filter = '[weak_evidence]' OR
+                        mutect_filter = '[strand_bias]' OR
+                        mutect_filter = '[weak_evidence, strand_bias]' OR
+                        mutect_filter = '[strand_bias, weak_evidence]'
+                    ) AND
+                    (
+                        \"n.loci.vep\" >= 5 OR
+                        (CosmicCount >= 25 AND myeloid_cosmic_count >= 1) OR
+                        CosmicCount >= 100 OR
+                        heme_cosmic_count >= 10 OR
+                        myeloid_cosmic_count >= 5 OR
+                        (isTruncatingHotSpot == 1 AND (SYMBOL = 'DNMT3A' OR SYMBOL = 'TET2' OR SYMBOL = 'ASXL1' OR SYMBOL = 'PPM1D'))
+                    ) 
+                )
+            ) AND
+                pon_2at2_percent is NULL AND
+                format_af >= 0.001 AND
+                m.variant_id IN (
+                    SELECT variant_id
+                    FROM pd_filtered
+                )
+            ) OR (m.key = 'chr20:32434638:A:AG' OR m.key = 'chr20:32434638:A:AGG');
+        """
+        if debug: log.logit(f"Executing: {sql}")
+        temp_connection.execute(sql)
+        temp_connection.execute("DETACH mutect_db;")
+        log.logit(f"Creating the vardict_filtered table...")
+        sql = """
+        CREATE TABLE vardict_filtered AS
+        SELECT *
+        FROM vardict_db.vardict
+        WHERE (
+            vardict_filter = '[PASS]' AND
             pon_2at2_percent is NULL AND
             format_af >= 0.001 AND
-            mutect.variant_id IN (
+            variant_id IN (
                 SELECT variant_id
                 FROM pd_filtered
             )
-        ) OR (mutect.key = 'chr20:32434638:A:AG' OR mutect.key = 'chr20:32434638:A:AGG');
-
-    CREATE OR REPLACE VIEW vardict_filtered AS
-    SELECT *
-    FROM vardict_db.vardict
-    WHERE (
-        vardict_filter = '[PASS]' AND
-        pon_2at2_percent is NULL AND
-        format_af >= 0.001 AND
-        variant_id IN (
-            SELECT variant_id
-            FROM pd_filtered
-        )
-    ) OR (key = 'chr20:32434638:A:AG' OR key = 'chr20:32434638:A:AGG');
-
-    CREATE OR REPLACE VIEW n_samples_and_median_af AS
-    SELECT m.variant_id, count(*) as n_samples, 
-        MEDIAN((m.format_af + v.format_af)/2) AS median_af
-    FROM mutect_filtered m
-    INNER JOIN vardict_filtered v
-    ON m.variant_id = v.variant_id AND m.sample_id = v.sample_id
-    GROUP BY m.variant_id;
-
-    CREATE OR REPLACE VIEW ch_pd AS
-    SELECT m.sample_name, m.key, m.mutect_filter, m.info_mbq_ref, m.info_mbq_alt, m.info_mmq_ref, m.info_mmq_alt, m.format_af, m.format_dp, m.format_ref_count, m.format_alt_count, m.format_ref_f1r2, m.format_alt_f1r2, m.format_ref_f2r1, m.format_alt_f2r1, m.format_ref_fwd, m.format_ref_rev, m.format_alt_fwd, m.format_alt_rev, m.fisher_p_value, m.batch,
-    v.vardict_filter, v.info_qual, v.info_mq, v.info_nm, v.format_ref_count, v.format_alt_count, v.format_dp, v.format_vd, v.format_af, v.format_ref_fwd, v.format_ref_rev, v.format_alt_fwd, v.format_alt_rev, v.fisher_p_value,
-    (m.format_af + v.format_af)/2 as average_af, a.*
-    FROM mutect_filtered m
-    INNER JOIN vardict_filtered v
-    ON m.variant_id = v.variant_id AND m.sample_id = v.sample_id
-    LEFT JOIN pd_filtered a
-    ON m.variant_id = a.variant_id
-    WHERE 
-        (GREATEST(m.format_af, v.format_af) >= 0.02) 
-        AND
-        (
-            (m.format_alt_fwd >= 1 AND m.format_alt_rev >= 1) 
-            OR 
-            (v.format_alt_fwd >= 1 AND v.format_alt_rev >= 1)
-        );
-
-    SELECT c.*, s.n_samples, s.median_af
-        FROM ch_pd c
-        LEFT JOIN n_samples_and_median_af s
-        ON c.variant_id = s.variant_id
-        WHERE
+        ) OR (key = 'chr20:32434638:A:AG' OR key = 'chr20:32434638:A:AGG');
+        """
+        if debug: log.logit(f"Executing: {sql}")
+        temp_connection.execute(sql)
+        temp_connection.execute("DETACH vardict_db;")
+        log.logit(f"Calculating n_samples...")
+        sql = """
+        CREATE TABLE n_samples_and_median_af AS
+        SELECT m.variant_id, count(*) as n_samples, 
+            MEDIAN((m.format_af + v.format_af)/2) AS median_af
+        FROM mutect_filtered m
+        INNER JOIN vardict_filtered v
+        ON m.variant_id = v.variant_id AND m.sample_id = v.sample_id
+        GROUP BY m.variant_id;
+        """
+        if debug: log.logit(f"Executing: {sql}")
+        temp_connection.execute(sql)
+        log.logit(f"Obtaining the intersection between Mutect_PASS and Vardict_PASS...")
+        sql = """
+        CREATE TABLE pass_mutect_vardict AS
+        SELECT m.sample_name, m.key, m.mutect_filter, m.info_mbq_ref, m.info_mbq_alt, m.info_mmq_ref, m.info_mmq_alt, m.format_af, m.format_dp, m.format_ref_count, m.format_alt_count, m.format_ref_f1r2, m.format_alt_f1r2, m.format_ref_f2r1, m.format_alt_f2r1, m.format_ref_fwd, m.format_ref_rev, m.format_alt_fwd, m.format_alt_rev, m.fisher_p_value, m.batch,
+        v.vardict_filter, v.info_qual, v.info_mq, v.info_nm, v.format_ref_count, v.format_alt_count, v.format_dp, v.format_vd, v.format_af, v.format_ref_fwd, v.format_ref_rev, v.format_alt_fwd, v.format_alt_rev, v.fisher_p_value,
+        (m.format_af + v.format_af)/2 as average_af, m.variant_id
+        FROM mutect_filtered m
+        INNER JOIN vardict_filtered v
+        ON m.variant_id = v.variant_id AND m.sample_id = v.sample_id
+        WHERE 
+            (GREATEST(m.format_af, v.format_af) >= 0.02) 
+            AND
             (
-                average_af <= 0.25 OR \"n.HGVSc\" >= 5 OR CosmicCount >= 25 OR
-                (
-                    (SYMBOL = 'DNMT3A' OR SYMBOL = 'TET2' OR SYMBOL = 'ASXL1' OR SYMBOL = 'PPM1D') AND 
-                    (VariantClass = 'frameshift_variant' OR VariantClass = 'stop_lost' OR VariantClass = 'stop_gained' OR VariantClass = 'transcript_ablation')
-                )
-            ) AND NOT (
-                average_af >= 0.25 AND (median_af >= 0.35 AND n_samples > 1)
+                (m.format_alt_fwd >= 1 AND m.format_alt_rev >= 1) 
+                OR 
+                (v.format_alt_fwd >= 1 AND v.format_alt_rev >= 1)
+            );
+        """
+        if debug: log.logit(f"Executing: {sql}")
+        temp_connection.execute(sql)
+        log.logit(f"Adding annotation information to variants...")
+        sql = """
+        CREATE OR REPLACE VIEW ch_pd AS
+        SELECT pass.*, a.*
+        FROM pass_mutect_vardict pass
+        LEFT JOIN pd_filtered a
+        ON pass.variant_id = a.variant_id;
+        """
+        if debug: log.logit(f"Executing: {sql}")
+        temp_connection.execute(sql)
+    log.logit(f"Grabbing CH Variants from Database...")
+    sql = """
+    SELECT c.*, s.n_samples, s.median_af
+    FROM ch_pd c
+    LEFT JOIN n_samples_and_median_af s
+    ON c.variant_id = s.variant_id
+    WHERE
+        (
+            average_af <= 0.25 OR \"n.HGVSc\" >= 5 OR CosmicCount >= 25 OR
+            (
+                (SYMBOL = 'DNMT3A' OR SYMBOL = 'TET2' OR SYMBOL = 'ASXL1' OR SYMBOL = 'PPM1D') AND 
+                (VariantClass = 'frameshift_variant' OR VariantClass = 'stop_lost' OR VariantClass = 'stop_gained' OR VariantClass = 'transcript_ablation')
             )
+        ) AND NOT (
+            average_af >= 0.25 AND (median_af >= 0.35 AND n_samples > 1)
+        );
     """
     #COPY () TO 'ch_pd.csv' (HEADER, DELIMITER ',');
     #AND fisher_p_value <= 1.260958e-09
@@ -478,24 +515,24 @@ def ch_to_df(mutect_connection, vardict_db, annotation_db, debug):
     #     (format_alt_fwd / (format_alt_fwd + format_alt_rev)) > 0.9 OR (format_alt_fwd / (format_alt_fwd + format_alt_rev)) < 0.1 AND
     #     (format_alt_rev / (format_alt_fwd + format_alt_rev)) > 0.9 OR (format_alt_rev / (format_alt_fwd + format_alt_rev))
     # )
-
     if debug: log.logit(f"Executing: {sql}")
-    df = mutect_connection.execute(sql).df()
-    mutect_connection.execute(f"DROP VIEW pd_filtered; DROP VIEW mutect_filtered; DROP VIEW vardict_filtered; DROP VIEW n_samples_and_median_af; DROP VIEW ch_pd")
-    mutect_connection.execute(f"DETACH vardict_db")
-    mutect_connection.execute(f"DETACH annotation_db")
+    df = temp_connection.execute(sql).df()
+    #mutect_connection.execute(f"DROP VIEW pd_filtered; DROP VIEW mutect_filtered; DROP VIEW vardict_filtered; DROP VIEW n_samples_and_median_af; DROP VIEW ch_pd")
+    #mutect_connection.execute(f"DETACH vardict_db")
+    #mutect_connection.execute(f"DETACH annotation_db")
     if debug: log.logit(f"SQL Complete")
     length = len(df)
     log.logit(f"{length} variants are identified to be CH mutations")
-    return df
+    return total_sample, df
 
 def dump_ch_variants(mutect_db, vardict_db, annotation_db, debug):
-    connection = db.duckdb_connect_rw(mutect_db, False)
-    df = ch_to_df(connection, vardict_db, annotation_db, debug)
-    total_sample = connection.execute(f"SELECT COUNT(DISTINCT sample_id) FROM mutect").fetchone()[0]
+    temp_connection = db.duckdb_connect_rw("temp_chpd.db", True)
+    total_sample, df = ch_to_df(temp_connection, mutect_db, vardict_db, annotation_db, debug)
+    temp_connection.close()
+    os.remove("temp_chpd.db")
     review_df, pass_df, df = determine_pathogenicity(df, total_sample, debug)
     length = len(df)
-    print(df)
+    #print(df)
     df.to_csv(f"ch_pd.all.csv", index=False, mode='w')
     review_df.to_csv(f"ch_pd.review.csv", index=False, mode='w')
     pass_df.to_csv(f"ch_pd.pass.csv", index=False, mode='w')
