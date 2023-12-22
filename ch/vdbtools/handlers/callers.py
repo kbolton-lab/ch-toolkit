@@ -1,6 +1,7 @@
-import os, glob, shutil
+import os, glob, shutil, math
 import duckdb
 import pandas as pd
+import multiprocessing as mp
 
 import ch.vdbtools.handlers.vcf as vcf
 import ch.vdbtools.handlers.variants as variants
@@ -80,7 +81,7 @@ def ensure_mutect_tbl(connection):
             pon_max_vaf                         decimal(10,5),
             fisher_p_value                      decimal(22,20),
             sample_id                           integer,
-            variant_id                          integer,
+            variant_id                          BIGINT,
             batch                               integer
         )
     '''
@@ -159,7 +160,7 @@ def ensure_vardict_tbl(connection):
             pon_max_vaf             decimal(10,5),
             fisher_p_value          decimal(22,20),
             sample_id               integer,
-            variant_id              integer,
+            variant_id              BIGINT,
             batch                   integer,
         )
     '''
@@ -203,7 +204,10 @@ def process_mutect(df, debug):
 def insert_mutect_caller(db_path, input_vcf, batch_number, clobber, debug):
     log.logit(f"Registering mutect variants from: {input_vcf} in batch: {batch_number}", color="green")
     counts, df = vcf.vcf_to_pd(input_vcf, "caller", batch_number, debug)
-    df['sample_name'] = os.path.basename(input_vcf).split('.')[1]
+    if 'info_sample' in df.columns:
+        df['sample_name'] = df['info_sample']
+    else:
+        df['sample_name'] = os.path.basename(input_vcf).split('.')[1]
     df = process_mutect(df, debug)
     caller_connection = db.duckdb_connect_rw(db_path, clobber)
     setup_caller_tbl(caller_connection, "mutect")
@@ -238,7 +242,8 @@ def process_vardict(df, debug):
 def insert_vardict_caller(db_path, input_vcf, batch_number, clobber, debug):
     log.logit(f"Registering vardict variants from: {input_vcf} in batch: {batch_number}", color="green")
     counts, df = vcf.vcf_to_pd(input_vcf, "caller", batch_number, debug)
-    df['sample_name'] = os.path.basename(input_vcf).split('.')[1]
+    #df['sample_name'] = os.path.basename(input_vcf).split('.')[1]
+    df['sample_name'] = df['info_sample']
     df = process_vardict(df, debug)
     caller_connection = db.duckdb_connect_rw(db_path, clobber)
     setup_caller_tbl(caller_connection, "vardict")
@@ -252,6 +257,7 @@ def insert_vardict_caller(db_path, input_vcf, batch_number, clobber, debug):
     log.logit(f"Variants Processed - Total: {counts}", color="green")
     log.logit(f"All Done!", color="green")
 
+#! DEPRECATED
 # This is the merging using *.db - For merging using *.parquet, see below
 def merge_caller_tables_(db_path, caller_connection, variant_db, sample_db, batch_number, caller, debug):
     log.logit(f'Merging Sample Callers from {db_path}')
@@ -266,7 +272,7 @@ def merge_caller_tables_(db_path, caller_connection, variant_db, sample_db, batc
 
     with indent(4, quote=' >'):
         for i, file in enumerate(glob.glob(db_path + "/" + "*.db")):
-            sample_name = os.path.basename(file).split('.')[1]
+            sample_name = os.path.basename(file).split('.')[1]            
             with indent(4, quote=' >'):
                 sample_caller_connection = db.duckdb_connect_rw(file, False)
                 log.logit(f"Adding Sample IDs to {caller} database")
@@ -275,7 +281,7 @@ def merge_caller_tables_(db_path, caller_connection, variant_db, sample_db, batc
                 variants.insert_variant_id_into_db(sample_caller_connection, caller, variant_db, debug)
                 sample_caller_connection.close()
             log.logit(f"Merging: {i} - {file}")
-            caller_connection.execute(f"ATTACH \'{file}\' as sample_{i}")
+            caller_connection.execute(f"ATTACH \'{file}\' as sample_{i} (READ_ONLY)")
             if debug: log.logit(f"Attached {file} as sample_{i}")
 
             # Getting Sample Name from Sample_VCF
@@ -313,11 +319,40 @@ def merge_caller_tables_(db_path, caller_connection, variant_db, sample_db, batc
             if debug: log.logit(f"SQL Complete")
     log.logit(f"Finished merging all tables from: {db_path}")
 
+# Parallelize adding the SampleID and VariantID and copying out the Parquet File
+def prepare_parquet_files(index, file, caller, sample_ids, sample_db, variant_db, check_folder, no_check_folder):
+    check = False
+    log.logit(f"Processing: {index} - {file}")
+    sample_caller_connection = db.duckdb_connect_rw(file, False)
+    #sample_caller_connection.execute(f"ALTER TABLE {caller} ALTER COLUMN variant_id TYPE BIGINT")
+    log.logit(f"Adding Sample IDs to {caller} database")
+    samples.insert_sample_id_into_db(sample_caller_connection, caller, sample_db, False)
+    log.logit(f"Adding Variant IDs to the {caller} variants")
+    variants.insert_variant_id_into_db(sample_caller_connection, caller, variant_db, False)
+    sample_ids_block = sample_caller_connection.execute(f"SELECT DISTINCT sample_id FROM {caller}").df()["sample_id"].tolist()
+
+    if any(sample_id in sample_ids for sample_id in sample_ids_block):
+        # Create link to safe folder
+        existing_sample_ids = [sample_id for sample_id in sample_ids_block if sample_id in sample_ids]
+        log.logit(f"These samples: {existing_sample_ids} already exists in {caller}, need check")
+        # Write a DuckDB table back to a Parquet file
+        parquetPath = check_folder + os.path.basename(file).replace(".db", ".parquet")
+        sample_caller_connection.execute(f"COPY {caller} TO '{parquetPath}' (FORMAT 'parquet')") 
+        check = True
+    else:
+        # Create link to unsafe folder
+        log.logit(f"These samples: {sample_ids_block} do not exist in {caller}, no check")
+        # Write a DuckDB table back to a Parquet file
+        parquetPath = no_check_folder + os.path.basename(file).replace(".db", ".parquet")
+        sample_caller_connection.execute(f"COPY {caller} TO '{parquetPath}' (FORMAT 'parquet')")
+        #sample_ids.extend(sample_ids_block)
+    sample_caller_connection.close()
+    return check
+
 #def put_parquet_file_into_db_with_id_check(db_folder, db_name, parquet_folder, clobber):
-def merge_caller_tables(db_path, caller_connection, variant_db, sample_db, batch_number, caller, debug):
+def merge_caller_tables(db_path, caller_connection, variant_db, sample_db, batch_number, caller, cores, debug):
     # Setting memory_limit
-    sql = "PRAGMA memory_limit='16GB'"
-    caller_connection.execute(sql)
+    caller_connection.execute("PRAGMA memory_limit='16GB'")
 
     # Getting all sample names from the caller table
     sql = f"""
@@ -327,7 +362,7 @@ def merge_caller_tables(db_path, caller_connection, variant_db, sample_db, batch
     caller_connection.execute(sql)
     sample_ids = caller_connection.df()["sample_id"].tolist()
 
-    # Create no_check and check merge folders withiøn the db_path
+    # Create no_check and check merge folders within the db_path
     check_folder = f"{db_path}/check/"
     os.makedirs(check_folder, exist_ok=True)
     check_count = 0
@@ -338,31 +373,11 @@ def merge_caller_tables(db_path, caller_connection, variant_db, sample_db, batch
     # Prior to importing all parquet files, we need to insert variant_id and sample_id
     log.logit(f"Creating temporary DuckDB to insert variant_id and sample_id into parquet files")
     with indent(4, quote=' >'):
-        for i, file in enumerate(glob.glob(db_path + "/" + "*.db")):
-            log.logit(f"Processing: {i} - {file}")
-            sample_caller_connection = db.duckdb_connect_rw(file, False)
-            log.logit(f"Adding Sample IDs to {caller} database")
-            samples.insert_sample_id_into_db(sample_caller_connection, caller, sample_db, debug)
-            log.logit(f"Adding Variant IDs to the {caller} variants")
-            variants.insert_variant_id_into_db(sample_caller_connection, caller, variant_db, debug)
-            sample_id = sample_caller_connection.execute(f"SELECT DISTINCT sample_id FROM {caller}").df()["sample_id"].tolist()[0]
-
-            if sample_id in sample_ids:
-                # Create link to safe folder
-                log.logit(f"Sample {sample_id} already exists in {caller}, need check")
-                # Write a DuckDB table back to a Parquet file
-                parquetPath = check_folder + os.basename(file).replace(".db", ".parquet")
-                sample_caller_connection.execute(f"COPY {caller} TO '{parquetPath}' (FORMAT 'parquet')") 
-                check_count += 1
-            else:
-                # Create link to unsafe folder
-                log.logit(f"Sample {sample_id} does not exist in {caller}, no check")
-                # Write a DuckDB table back to a Parquet file
-                parquetPath = no_check_folder + os.basename(file).replace(".db", ".parquet")
-                sample_caller_connection.execute(f"COPY {caller} TO '{parquetPath}' (FORMAT 'parquet')")
-                no_check_count += 1
-                sample_ids.append(sample_id)
-            sample_caller_connection.close()
+        with mp.Pool(cores) as p:
+            check = p.starmap(prepare_parquet_files, [(index, db_file, caller, sample_ids, sample_db, variant_db, check_folder, no_check_folder) for index, db_file in enumerate(glob.glob(db_path + "/" + "*.db"))])
+    # The multiprocessing will return either True or False depending on it needs to check or not.
+    check_count = check.count(True)             # Number of files need to be checked
+    no_check_count = check.count(False)         # Number of files that don't need to be checked and can perform unsafe merge            
     log.logit(f"Finished creating check and no_check folders, check: {check_count}, no_check: {no_check_count}")
 
     # Insert no_check folder
@@ -396,11 +411,11 @@ def merge_caller_tables(db_path, caller_connection, variant_db, sample_db, batch
     shutil.rmtree(no_check_folder)
     log.logit(f"Finished inserting {caller} variants, total: {total}")
 
-def insert_caller_batch(db_path, caller_db, variant_db, sample_db, caller, batch_number, debug, clobber):
+def insert_caller_batch(db_path, caller_db, variant_db, sample_db, caller, batch_number, cores, debug, clobber):
     log.logit(f"Inserting variants from batch: {batch_number} into {caller_db}", color="green")
     caller_connection = db.duckdb_connect_rw(caller_db, clobber)
     setup_caller_tbl(caller_connection, caller)
-    merge_caller_tables(db_path, caller_connection, variant_db, sample_db, batch_number, caller, debug)
+    merge_caller_tables(db_path, caller_connection, variant_db, sample_db, batch_number, caller, cores, debug)
     caller_connection.close()
     log.logit(f"Finished inserting variants")
     log.logit(f"All Done!", color="green")
@@ -410,7 +425,8 @@ def annotate_fisher_test(pileup_db, caller_db, caller, batch_number, debug):
     caller = "mutect" if caller.lower() == "mutect" else "vardict"
     caller_connection = db.duckdb_connect_rw(caller_db, False)
     log.logit(f"Finding all variants within {caller_db} that does not have the fisher's exact test p-value calculated for batch: {batch_number}")
-    caller_connection.execute(f"ATTACH '{pileup_db}' as pileup")
+    caller_connection.execute("PRAGMA memory_limit='16GB'")
+    caller_connection.execute(f"ATTACH '{pileup_db}' as pileup (READ_ONLY)")
     sql = f'''
         SELECT c.variant_id, c.sample_id, v.PoN_RefDepth, v.PoN_AltDepth, c.format_ref_fwd, c.format_ref_rev, c.format_alt_fwd, c.format_alt_rev,
         FROM {caller} c LEFT JOIN pileup.pileup v
@@ -439,3 +455,51 @@ def annotate_fisher_test(pileup_db, caller_db, caller, batch_number, debug):
     caller_connection.close()
     log.logit(f"Finished updating fisher test p-values inside {caller_db}")
     log.logit(f"Done!", color = "green")
+    
+def caller_to_chromosome(caller_db, caller, batch_number, chrom, base_db, debug):
+    caller = "mutect" if caller.lower() == "mutect" else "vardict"
+    log.logit(f"Processing {chrom}...")
+    chromosome_connection = db.duckdb_connect_rw(f"{base_db}.{chrom}.db", True)
+    chromosome_connection.execute("PRAGMA memory_limit='16GB'")
+    chromosome_connection.execute(f"ATTACH '{caller_db}' as caller (READ_ONLY)")
+    sql = f"""
+            SELECT *
+            FROM caller.{caller} c
+            WHERE key LIKE '{chrom}:%'
+        """
+    if batch_number is not None:
+        sql = sql + f" AND batch = {batch_number}"
+    log.logit(f"Writing out variants to {base_db}.{chrom}.db")
+    chromosome_connection.execute(f"CREATE TABLE {caller} AS {sql}")
+    chromosome_connection.execute("DETACH caller")
+    chromosome_connection.close()
+    log.logit(f"Finished processing {caller_db}")
+    log.logit(f"Done!", color = "green")
+
+def merge_chromosomes(chr_path, caller_connection, caller, debug):
+    # Setting memory_limit
+    caller_connection.execute("PRAGMA memory_limit='16GB'")
+    log.logit(f"Creating parquet files")
+    with indent(4, quote=' >'):
+        for i, file in enumerate(glob.glob(chr_path + "/" + "*.chr*.db")):
+            log.logit(f"Processing: {i} - {file}")
+            parquetPath = os.path.basename(file).replace(".db", ".parquet")
+            chromosome_connection = db.duckdb_connect_rw(file, False)
+            chromosome_connection.execute(f"COPY {caller} TO '{parquetPath}' (FORMAT 'parquet')")
+            chromosome_connection.close()
+    log.logit(f"Finished creating parquet files for all chromosomes in {chr_path}")
+    log.logit(f"Inserting chromosome files into {caller}")
+    sql = f"INSERT INTO {caller} SELECT * FROM read_parquet('*.parquet')"
+    caller_connection.execute(sql)
+    total = caller_connection.execute(f"SELECT COUNT(*) FROM {caller}").fetchall()[0][0]
+    caller_connection.close()
+    log.logit(f"Finished inserting {total} VCF rows into {caller}")
+
+def chromosome_to_caller(chr_path, caller_db, caller, debug):
+    log.logit(f"Inserting chromosomes from {chr_path} into {caller_db}", color="green")
+    caller_connection = db.duckdb_connect_rw(caller_db, True)
+    setup_caller_tbl(caller_connection, caller)
+    merge_chromosomes(chr_path, caller_connection, caller, debug)
+    caller_connection.close()
+    log.logit(f"Finished inserting variants")
+    log.logit(f"All Done!", color="green")

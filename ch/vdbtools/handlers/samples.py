@@ -43,6 +43,7 @@ def insert_samples(samples_file, sample_duckdb, batch_number, debug, clobber):
 
 def insert_sample_id_into_df(df, connection, debug):
     log.logit(f"Inserting sample_id for samples")
+    connection.execute("PRAGMA memory_limit='16GB'")
     sql = f"""
             SELECT sample_id, sample_name
             FROM samples s
@@ -60,7 +61,8 @@ def insert_sample_id_into_df(df, connection, debug):
 
 def insert_sample_id_into_db(db, caller, sample_db, debug):
     log.logit(f"Inserting sample_id from {sample_db} for {caller} samples")
-    db.execute(f"ATTACH \'{sample_db}\' as s")
+    db.execute("PRAGMA memory_limit='16GB'")
+    db.execute(f"ATTACH \'{sample_db}\' as s (READ_ONLY)")
     sql = f"""
         UPDATE {caller}
         SET sample_id = s.sample_id

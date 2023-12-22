@@ -57,14 +57,15 @@ def import_vcf(caller, input_vcf, database, batch_number, clobber, debug):
               required=True,
               help="Type of VCF file to import")
 @click.option('--batch-number', '-b', type=click.INT, required=True, help="The batch number of this import set")
+@click.option('--threads', 'cores', type=click.INT, required=False, show_default=True, default=1, help="Number of Threads used for parallelization")
 @click.option('--debug', '-d', is_flag=True, show_default=True, default=False, required=True, help="Print extra debugging output")
 @click.option('--clobber', '-f', is_flag=True, show_default=True, default=False, required=True, help="If exists, delete existing duckdb file and then start from scratch")
-def merge_batch_vcf(db_path, caller_db, variant_db, sample_db, caller, batch_number, debug, clobber):
+def merge_batch_vcf(db_path, caller_db, variant_db, sample_db, caller, batch_number, cores, debug, clobber):
     """
     Ingest the variants in a batch into main variants database
     """
     import ch.vdbtools.importer as importer
-    importer.import_caller_batch(db_path, caller_db, variant_db, sample_db, caller, batch_number, debug, clobber)
+    importer.import_caller_batch(db_path, caller_db, variant_db, sample_db, caller, batch_number, cores, debug, clobber)
     log.logit(f"---> Successfully imported variant batch ({batch_number}) into {caller_db}", color="green")
 
 @cli.command('import-sample-variants', short_help="Register the variants for a VCF file into a variant database")
@@ -94,6 +95,55 @@ def merge_batch_variants(db_path, variant_db, batch_number, debug, clobber):
     import ch.vdbtools.importer as importer
     importer.import_variant_batch(db_path, variant_db, batch_number, debug, clobber)
     log.logit(f"---> Successfully imported variant batch ({batch_number}) into {variant_db}", color="green")
+
+#! Convert a database into chromosomes
+@cli.command('database-to-chromosome', short_help="Splits <Mutect|Vardict|Variant|Annotation|Pileup> database into individual chromosomes")
+@click.option('--db', 'db', type=click.Path(), required=True, help="The database to split into chromosomes")
+@click.option('--which_db', 'which_db',
+              type=click.Choice(['mutect', 'vardict', 'variant', 'annotation', 'pileup'], case_sensitive=False),
+              required=True,
+              help="The specific database being processed")
+@click.option('--batch-number', '-b', type=click.INT, default=None, help="The batch number in case only want chromosome database for a subset")
+@click.option('--threads', 'cores', type=click.INT, required=False, show_default=True, default=1, help="Number of Threads used for parallelization")
+@click.option('--chromosome', '-c', type=click.STRING, default=None, help="The chromosome set of interest")
+@click.option('--debug', '-d', is_flag=True, show_default=True, default=False, required=True, help="Print extra debugging output")
+def caller_to_chromosome(db, which_db, batch_number, chromosome, cores, debug):
+    """
+    Splits the <Mutect|Vardit|Variant|Annotation|Pileup> database into individual chromosomes\n
+    Has the functionality to be specific about which batch needs to be processed as well as which chromosome\n
+    Default is to split the database into individual chromosomes (1-22, X, Y) for all batches
+    variant_db, pileup_db, and annotation_db CANNOT be split by batch - ONLY by chromosome
+    """
+    import ch.vdbtools.process as process
+    process.db_to_chromosome(db, which_db, batch_number, chromosome, cores, debug)
+    if batch_number != None:
+        if chromosome != None:
+            log.logit(f"---> Successfully split {db} from batch: {batch_number} into chromosome: {chromosome}", color="green")
+        else:
+            log.logit(f"---> Successfully split {db} from batch: {batch_number} into ALL chromosomes", color="green")
+    else:
+        if chromosome != None:
+            log.logit(f"---> Successfully split {db} into chromosome: {chromosome}", color="green")
+        else:
+            log.logit(f"---> Successfully split {db} into ALL chromosomes", color="green")
+
+#! Convert chromosome split database back into a single caller database
+@cli.command('chromosome-to-caller', short_help="Combines all chromosome databases into a single <Mutect|Vardict> database")
+@click.option('--chr-path', '-p', type=click.Path(exists=True), required=True, help="The path to where all the databases to be combined are stored")
+@click.option('--cdb', 'caller_db', type=click.Path(), required=True, help="The caller database to combine the chromosomes")
+@click.option('--caller', 'caller',
+              type=click.Choice(['mutect', 'vardict'], case_sensitive=False),
+              required=True,
+              help="Type of VCF file to import")
+@click.option('--debug', '-d', is_flag=True, show_default=True, default=False, required=True, help="Print extra debugging output")
+def chromosome_to_caller(chr_path, caller_db, caller, debug):
+    """
+    After splitting the caller databases into individual variants to do processing, combine the information into a central system\n
+    NOTE: This will create a completely new <Mutect|Vardict> database. If columns have been changed in the chromosomes, then the new database will reflect those changes.
+    """
+    import ch.vdbtools.process as process
+    process.caller_to_chromosome(chr_path, caller_db, caller, debug)
+    log.logit(f"---> Successfully imported chromosomes from {chr_path} into {caller_db}", color="green")
 
 @cli.command('dump-variants', short_help="dumps all variants inside duckdb into a VCF file")
 @click.option('--vdb', 'variant_db', type=click.Path(exists=True), required=True, help="The duckdb database to dump the variants from")
@@ -155,8 +205,8 @@ def calculate_fishers_test(pileup_db, caller_db, caller, batch_number, debug):
     """
     Calculates the Fisher's Exact Test for all Variants within the Variant Caller duckdb
     """
-    import ch.vdbtools.handlers.callers as callers
-    callers.annotate_fisher_test(pileup_db, caller_db, caller, batch_number, debug)
+    import ch.vdbtools.process as process
+    process.annotate_fisher_test(pileup_db, caller_db, caller, batch_number, debug)
     log.logit(f"---> Successfully calculated the Fisher's Exact Test for variants within ({batch_number}) and {caller_db}", color="green")
 
 @cli.command('import-vep', short_help="updates variants inside duckdb with VEP information")

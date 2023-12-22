@@ -10,6 +10,7 @@ from clint.textui import indent
 import importlib.resources
 
 def load_df_file_into_annotation(connection, df, table, debug):
+    connection.execute("PRAGMA memory_limit='16GB'")
     sql = f"""
         INSERT INTO {table} SELECT df.*
         FROM df
@@ -243,6 +244,7 @@ def dump_variants_batch(annotation_db, batch_number, debug):
     log.logit(f"Dumping variants from batch: {batch_number} in {annotation_db} to a CSV file for AnnotatePD.", color="green")
     annotation_connection = db.duckdb_connect_ro(annotation_db)
     log.logit(f"Grabbing Variants to perform AnnotatePD")
+    annotation_connection.execute("PRAGMA memory_limit='16GB'")
     sql = f'''
             SELECT variant_id, key, Consequence, SYMBOL, EXON, AAchange, HGVSc, HGVSp, \"n.HGVSc\", \"n.HGVSp\"
             FROM vep
@@ -285,3 +287,27 @@ def import_annotate_pd(annotation_db, annotate_pd, batch_number, debug):
     log.logit(f"Finished importing AnnotatePD information")
     log.logit(f"Variants Processed - Total: {counts}", color="green")
     log.logit(f"All Done!", color="green")
+
+def annotation_to_chromosome(annotation_db, annotation, chrom, base_db, debug):
+    log.logit(f"Processing {chrom}...")
+    chromosome_connection = db.duckdb_connect_rw(f"{base_db}.{chrom}.db", True)
+    chromosome_connection.execute("PRAGMA memory_limit='16GB'")
+    chromosome_connection.execute(f"ATTACH '{annotation_db}' as {annotation} (READ_ONLY)")
+    sql = f"""
+            SELECT *
+            FROM {annotation}.vep a
+            WHERE key LIKE '{chrom}:%'
+        """
+    log.logit(f"Writing out variants from vep to {base_db}.{chrom}.db")
+    chromosome_connection.execute(f"CREATE TABLE vep AS {sql}")
+    sql = f"""
+            SELECT *
+            FROM {annotation}.pd a
+            WHERE key LIKE '{chrom}:%'
+        """
+    log.logit(f"Writing out variants from pd to {base_db}.{chrom}.db")
+    chromosome_connection.execute(f"CREATE TABLE pd AS {sql}")
+    chromosome_connection.execute(f"DETACH {annotation}")
+    chromosome_connection.close()
+    log.logit(f"Finished processing {annotation_db}")
+    log.logit(f"Done!", color = "green")

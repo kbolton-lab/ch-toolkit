@@ -9,6 +9,7 @@ import pandas as pd
 from clint.textui import indent, puts_err, puts
 
 def duckdb_load_df_file(duckdb_connection, df, table):
+    duckdb_connection.execute("PRAGMA memory_limit='16GB'")
     sql = f"""
         INSERT INTO {table} SELECT * FROM df
     """
@@ -50,26 +51,31 @@ def variants_to_df(input_vcf, batch_number, debug):
 
 def pileup_to_df(input_vcf, batch_number, debug):
     log.logit(f"Reading in the Pileup VCF...")
-    res = pd.read_csv(input_vcf,
-            comment='#',
-            compression='gzip',
-            sep='\t',
-            header=None,
-            usecols=[0,1,3,4,7]).rename(columns={0: "chrom",
-                                              1: "pos",
-                                              3: "ref",
-                                              4: "alt",
-                                              7: "info"})
-    log.logit(f"Finished reading in the pileup VCF")
-    log.logit(f"Formatting the dataframe...")
-    res['key'] = res['chrom'] + ':' + res['pos'].astype(str) + ':' + res['ref'] + ':' + res['alt']
-    res[['PoN_RefDepth','PoN_AltDepth']] = res['info'].str.split(";", expand=True)
-    res['PoN_RefDepth'] = res['PoN_RefDepth'].str.split("=").str[1]
-    res['PoN_AltDepth'] = res['PoN_AltDepth'].str.split("=").str[1]
-    res['batch'] = batch_number
-    res['variant_id'] = None
-    res = res[['key', 'PoN_RefDepth', 'PoN_AltDepth', 'batch', 'variant_id']]
+    chunksize = 100_000_000
+    chunks = []
+    for chunk in pd.read_csv(input_vcf,
+                             comment='#',
+                             compression='gzip',
+                             sep='\t',
+                             header=None,
+                             usecols=[0,1,3,4,7],
+                             chunksize=chunksize):
+        chunk = chunk.rename(columns={0: "chrom",
+                                      1: "pos",
+                                      3: "ref",
+                                      4: "alt",
+                                      7: "info"})
+        log.logit(f"Formatting the dataframe...")
+        chunk['key'] = chunk['chrom'] + ':' + chunk['pos'].astype(str) + ':' + chunk['ref'] + ':' + chunk['alt']
+        chunk[['PoN_RefDepth','PoN_AltDepth']] = chunk['info'].str.split(";", expand=True)
+        chunk['PoN_RefDepth'] = chunk['PoN_RefDepth'].str.split("=").str[1]
+        chunk['PoN_AltDepth'] = chunk['PoN_AltDepth'].str.split("=").str[1]
+        chunk['batch'] = batch_number
+        chunk['variant_id'] = None
+        chunk = chunk[['key', 'PoN_RefDepth', 'PoN_AltDepth', 'batch', 'variant_id']]
+        chunks.append(chunk)
     log.logit(f"Finished preparing the dataframe...")
+    res = pd.concat(chunks, ignore_index=True)
     total = len(res)
     return total, res
 
