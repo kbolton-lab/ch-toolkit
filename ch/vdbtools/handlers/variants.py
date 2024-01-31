@@ -103,7 +103,7 @@ def insert_variant_id_into_df(df, connection, debug):
     df = df.drop('key', axis=1)
     return df
 
-def insert_variant_id_into_db(db, table, variant_db, debug):
+def insert_variant_id_into_db(db, table, variant_db, debug, filter_string = True):
     log.logit(f"Inserting variant_id from {variant_db} for all {table} variants")
     db.execute("PRAGMA memory_limit='16GB'")
     db.execute(f"ATTACH \'{variant_db}\' as v (READ_ONLY)")
@@ -112,7 +112,8 @@ def insert_variant_id_into_db(db, table, variant_db, debug):
         SET variant_id = v.variant_id
         FROM v.variants v
         WHERE {table}.key = v.key
-        AND {table}.variant_id is NULL;
+        AND {table}.variant_id is NULL
+        AND {filter_string};
     """
     if debug: log.logit(f"Executing: {sql}")
     db.execute(sql)
@@ -136,21 +137,21 @@ def insert_variant_keys(df, connection, debug):
     df = keys.merge(df, on='variant_id', how='left')
     return df
 
-def get_variants_from_table(connection, batch_number, chromosome):
+def get_variants_from_table(connection, batch_number, chromosome, filter_string = True):
     if batch_number != None:
         if chromosome != None:
             log.logit(f"Grabbing variants from batch: {batch_number} and chromosome: {chromosome} from the database")
-            sql = f"SELECT variant_id, chrom, pos, ref, alt FROM variants WHERE batch = {batch_number} AND chrom = \'{chromosome}\'"
+            sql = f"SELECT variant_id, chrom, pos, ref, alt FROM variants WHERE batch = {batch_number} AND chrom = \'{chromosome}\' AND {filter_string}"
         else:
             log.logit(f"Grabbing variants from batch: {batch_number} from the database")
-            sql = f"SELECT variant_id, chrom, pos, ref, alt FROM variants WHERE batch = {batch_number}"
+            sql = f"SELECT variant_id, chrom, pos, ref, alt FROM variants WHERE batch = {batch_number} AND {filter_string}"
     else:
         if chromosome != None:
             log.logit(f"Grabbing variants from chromosome: {chromosome} from the database")
-            sql = f"SELECT variant_id, chrom, pos, ref, alt FROM variants WHERE chrom = \'{chromosome}\'"
+            sql = f"SELECT variant_id, chrom, pos, ref, alt FROM variants WHERE chrom = \'{chromosome}\' AND {filter_string}"
         else:
             log.logit(f"Grabbing variants from the database")
-            sql = f"SELECT variant_id, chrom, pos, ref, alt FROM variants"
+            sql = f"SELECT variant_id, chrom, pos, ref, alt FROM variants AND {filter_string}"
     return connection.sql(sql)
 
 def dump_variant_batch(variant_db, header, batch_number, chromosome, debug):
@@ -195,8 +196,15 @@ def import_pon_pileup(pileup_db, variant_db, pon_pileup, batch_number, debug, cl
     ensure_pileup_table(pileup_connection)
     counts, df = vcf.vcf_to_pd(pon_pileup, "pileup", batch_number, debug)
     vcf.duckdb_load_df_file(pileup_connection, df, "pileup")
-    log.logit(f"Adding Variant IDs to the pileup database")
-    insert_variant_id_into_db(pileup_connection, "pileup", variant_db, debug)
+    if counts > 100_000_000:
+        for chrom in ['chr1', 'chr2', 'chr3', 'chr4', 'chr5', 'chr6', 'chr7', 'chr8', 'chr9', 'chr10', 
+               'chr11', 'chr12', 'chr13', 'chr14', 'chr15', 'chr16', 'chr17', 'chr18', 'chr19', 'chr20', 
+               'chr21', 'chr22', 'chrX', 'chrY']:
+            log.logit(f"Adding Variant IDs to the pileup database for: {chrom}")
+            insert_variant_id_into_db(pileup_connection, "pileup", variant_db, debug, f"pileup.key LIKE '{chrom}:%'")
+    else:
+        log.logit(f"Adding Variant IDs to the pileup database")
+        insert_variant_id_into_db(pileup_connection, "pileup", variant_db, debug)
     pileup_connection.close()
     log.logit(f"Finished importing pileup information")
     log.logit(f"Variants Processed - Total: {counts}", color="green")

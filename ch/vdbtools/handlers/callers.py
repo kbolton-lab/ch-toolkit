@@ -198,7 +198,8 @@ def process_mutect(df, debug):
     df['sample_id'] = None
     df['variant_id'] = None
     df = df[['sample_name', 'key', 'version', 'mutect_filter', 'info_as_filterstatus', 'info_as_sb_table', 'info_dp', 'info_ecnt', 'info_mbq_ref', 'info_mbq_alt', 'info_mfrl_ref', 'info_mfrl_alt', 'info_mmq_ref', 'info_mmq_alt', 'info_mpos', 'info_popaf', 'info_roq', 'info_rpa_ref', 'info_rpa_alt', 'info_ru', 'info_str', 'info_strq', 'info_tlod', 'format_af', 'format_dp', 'format_ref_count', 'format_alt_count', 'format_ref_f1r2', 'format_alt_f1r2', 'format_ref_f2r1', 'format_alt_f2r1', 'format_gt', 'format_ref_fwd', 'format_ref_rev', 'format_alt_fwd', 'format_alt_rev', 'pon_2at2_percent', 'pon_nat2_percent', 'pon_max_vaf', 'fisher_p_value', 'sample_id', 'variant_id', 'batch']]
-    df = df.drop_duplicates(subset='key', keep='first')
+    log.logit(f"Removing any duplicate variants that may have occured during the merging process")
+    df = df.drop_duplicates(subset=['key', 'sample_name'], keep='first')
     return df
 
 def insert_mutect_caller(db_path, input_vcf, batch_number, clobber, debug):
@@ -207,7 +208,10 @@ def insert_mutect_caller(db_path, input_vcf, batch_number, clobber, debug):
     if 'info_sample' in df.columns:
         df['sample_name'] = df['info_sample']
     else:
-        df['sample_name'] = os.path.basename(input_vcf).split('.')[1]
+        if input_vcf.endswith('.vcf'):
+            df['sample_name'] = '.'.join(os.path.basename(input_vcf).split('.')[1:-1])
+        elif input_vcf.endswith('.vcf.gz'):
+            df['sample_name'] = '.'.join(os.path.basename(input_vcf).split('.')[1:-2])
     df = process_mutect(df, debug)
     caller_connection = db.duckdb_connect_rw(db_path, clobber)
     setup_caller_tbl(caller_connection, "mutect")
@@ -236,14 +240,20 @@ def process_vardict(df, debug):
     df['sample_id'] = None
     df['variant_id'] = None
     df = df[['sample_name', 'key', 'version', 'vardict_filter', 'info_type', 'info_dp', 'info_vd', 'info_af', 'info_bias', 'info_refbias', 'info_varbias', 'info_pmean', 'info_pstd', 'info_qual', 'info_qstd', 'info_sbf', 'info_oddratio', 'info_mq', 'info_sn', 'info_hiaf', 'info_adjaf', 'info_shift3', 'info_msi', 'info_msilen', 'info_nm', 'info_lseq', 'info_rseq', 'info_hicnt', 'info_hicov', 'info_splitread', 'info_spanpair', 'info_duprate', 'format_ref_count', 'format_alt_count', 'format_gt', 'format_dp', 'format_vd', 'format_af', 'format_ref_fwd', 'format_ref_rev', 'format_alt_fwd', 'format_alt_rev', 'pon_2at2_percent', 'pon_nat2_percent', 'pon_max_vaf', 'fisher_p_value', 'sample_id', 'variant_id', 'batch']]
-    df = df.drop_duplicates(subset='key', keep='first')
+    log.logit(f"Removing any duplicate variants that may have occured during the merging process")
+    df = df.drop_duplicates(subset=['key', 'sample_name'], keep='first')
     return df
 
 def insert_vardict_caller(db_path, input_vcf, batch_number, clobber, debug):
     log.logit(f"Registering vardict variants from: {input_vcf} in batch: {batch_number}", color="green")
     counts, df = vcf.vcf_to_pd(input_vcf, "caller", batch_number, debug)
-    #df['sample_name'] = os.path.basename(input_vcf).split('.')[1]
-    df['sample_name'] = df['info_sample']
+    if 'info_sample' in df.columns:
+        df['sample_name'] = df['info_sample']
+    else:
+        if input_vcf.endswith('.vcf'):
+            df['sample_name'] = '.'.join(os.path.basename(input_vcf).split('.')[1:-1])
+        elif input_vcf.endswith('.vcf.gz'):
+            df['sample_name'] = '.'.join(os.path.basename(input_vcf).split('.')[1:-2])
     df = process_vardict(df, debug)
     caller_connection = db.duckdb_connect_rw(db_path, clobber)
     setup_caller_tbl(caller_connection, "vardict")
@@ -420,42 +430,62 @@ def insert_caller_batch(db_path, caller_db, variant_db, sample_db, caller, batch
     log.logit(f"Finished inserting variants")
     log.logit(f"All Done!", color="green")
 
-def annotate_fisher_test(pileup_db, caller_db, caller, batch_number, debug):
+def annotate_fisher_test(pileup_db, caller_db, caller, batch_number, by_chromosome, debug):
+    if by_chromosome:
+        chromosome = ['chr1', 'chr2', 'chr3', 'chr4', 'chr5', 'chr6', 'chr7', 'chr8', 'chr9', 'chr10', 
+               'chr11', 'chr12', 'chr13', 'chr14', 'chr15', 'chr16', 'chr17', 'chr18', 'chr19', 'chr20', 
+               'chr21', 'chr22', 'chrX', 'chrY']
+    else:
+        chromosome = ['ALL Chromosomes']
     log.logit(f"Performing the Fisher's Exact Test on the variants inside {caller_db} for batch: {batch_number}")
     caller = "mutect" if caller.lower() == "mutect" else "vardict"
-    caller_connection = db.duckdb_connect_rw(caller_db, False)
+    temp_connection = db.duckdb_connect_rw("temp_fishers.db", False)
     log.logit(f"Finding all variants within {caller_db} that does not have the fisher's exact test p-value calculated for batch: {batch_number}")
-    caller_connection.execute("PRAGMA memory_limit='16GB'")
-    caller_connection.execute(f"ATTACH '{pileup_db}' as pileup (READ_ONLY)")
-    sql = f'''
-        SELECT c.variant_id, c.sample_id, v.PoN_RefDepth, v.PoN_AltDepth, c.format_ref_fwd, c.format_ref_rev, c.format_alt_fwd, c.format_alt_rev,
-        FROM {caller} c LEFT JOIN pileup.pileup v
-        ON c.variant_id = v.variant_id
-        WHERE c.fisher_p_value is NULL AND
-            PoN_RefDepth is NOT NULL AND
-            PoN_AltDepth is NOT NULL AND
-            c.batch = {batch_number}
-    '''
-    if debug: log.logit(f"Executing: {sql}")
-    df = caller_connection.execute(sql).df()
-    caller_connection.execute(f"DETACH pileup")
-    if debug: log.logit(f"SQL Complete")
-    length = len(df)
-    log.logit(f"There were {length} variants without fisher test p-value within {caller_db}")
-    log.logit(f"Calculating Fisher Exact Test for all variants inside {caller_db}")
-    df = fisher_test.pvalue_df(df)
-    log.logit(f"Updating {caller_db} with the fisher's exact test p-values")
-    sql = f"""
-        UPDATE {caller} as c
-        SET fisher_p_value = df.pvalue
-        FROM df
-        WHERE c.variant_id = df.variant_id AND c.sample_id = df.sample_id
-    """
-    caller_connection.sql(sql)
+    temp_connection.execute("PRAGMA memory_limit='16GB'")
+    temp_connection.execute(f"ATTACH '{pileup_db}' as pileup (READ_ONLY)")
+    temp_connection.execute(f"ATTACH '{caller_db}' as caller_db (READ_ONLY)")
+    for chrom in chromosome:
+        log.logit(f"Processing {chrom}")
+        if by_chromosome:
+            filter_string = f"c.key LIKE '{chrom}:%'"
+        else:
+            filter_string = "TRUE"
+        sql = f'''
+            CREATE TABLE IF NOT EXISTS fisher_variants AS
+            SELECT c.variant_id, c.sample_id, v.PoN_RefDepth, v.PoN_AltDepth, c.format_ref_fwd, c.format_ref_rev, c.format_alt_fwd, c.format_alt_rev
+            FROM caller_db.{caller} c LEFT JOIN pileup.pileup v
+            ON c.variant_id = v.variant_id
+            WHERE c.fisher_p_value is NULL AND
+                PoN_RefDepth is NOT NULL AND
+                PoN_AltDepth is NOT NULL AND
+                c.batch = {batch_number} AND
+                {filter_string};
+            
+            SELECT * 
+            FROM fisher_variants;
+        '''
+        if debug: log.logit(f"Executing: {sql}")
+        df = temp_connection.execute(sql).df()
+        if debug: log.logit(f"SQL Complete")
+        length = len(df)
+        log.logit(f"There were {length} variants without fisher test p-value within {caller_db}")
+        log.logit(f"Calculating Fisher Exact Test for all variants inside {caller_db}")
+        df = fisher_test.pvalue_df(df)
+        caller_connection = db.duckdb_connect_rw(f"{caller_db}", False)
+        log.logit(f"Updating {caller_db} with the fisher's exact test p-values")
+        sql = f"""
+            UPDATE {caller} as c
+            SET fisher_p_value = df.pvalue
+            FROM df
+            WHERE c.variant_id = df.variant_id AND c.sample_id = df.sample_id
+        """
+        caller_connection.sql(sql)
+    temp_connection.close()
+    os.remove(f"temp_fishers.db")
     caller_connection.close()
     log.logit(f"Finished updating fisher test p-values inside {caller_db}")
     log.logit(f"Done!", color = "green")
-    
+
 def caller_to_chromosome(caller_db, caller, batch_number, chrom, base_db, debug):
     caller = "mutect" if caller.lower() == "mutect" else "vardict"
     log.logit(f"Processing {chrom}...")

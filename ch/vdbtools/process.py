@@ -2,9 +2,9 @@ import sys
 import multiprocessing as mp
 import ch.utils.logger as log
 
-def annotate_fisher_test(pileup_db, caller_db, caller, batch_number, debug):
+def annotate_fisher_test(pileup_db, caller_db, caller, batch_number, by_chromosome, debug):
     import ch.vdbtools.handlers.callers as callers
-    callers.annotate_fisher_test(pileup_db, caller_db, caller, batch_number, debug)
+    callers.annotate_fisher_test(pileup_db, caller_db, caller, batch_number, by_chromosome, debug)
 
 def db_to_chromosome(db, which_db, batch_number, chromosome, cores, debug):
     dispatch = {
@@ -70,3 +70,12 @@ def pileup_to_chromosome(pileup_db, pileup, batch_number, chromosome, cores, deb
 def chromosome_to_caller(chr_path, caller_db, caller, debug):
     import ch.vdbtools.handlers.callers as callers
     callers.chromosome_to_caller(chr_path, caller_db, caller, debug)
+
+def ch_variants_only(caller_db, caller, annotation_db, batch_number, chromosome, cores, debug):
+    batch_number, chromosome, base_db = set_options(caller_db, batch_number, chromosome, debug)
+    import ch.vdbtools.analysis.ch as ch
+    #for chrom in chromosome:
+    #    ch.ch_variants_only(mutect_db, vardict_db, annotation_db, chrom, debug)
+    with mp.Pool(cores) as p:
+        p.starmap(ch.ch_variants_only, [(caller_db, base_db, caller, annotation_db, chrom, debug) for chrom in chromosome])
+    ch.merge_ch_variants(base_db, caller)

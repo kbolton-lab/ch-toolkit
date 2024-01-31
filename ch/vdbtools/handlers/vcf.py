@@ -144,8 +144,9 @@ def caller_to_df(input_vcf, batch_number, debug):
     format_field_values.columns = format_field_values.columns.str.lower()
     format_field_values = format_field_values.add_prefix('format_')
 
-    res = pd.concat([res.drop('INFO', axis=1), info_field_values], axis=1)
-    res = pd.concat([res.drop(['FORMAT', 'SAMPLE'], axis=1), format_field_values], axis=1)
+    res = pd.concat([res.drop(['INFO', 'FORMAT', 'SAMPLE'], axis=1), info_field_values, format_field_values], axis=1)
+    #res = pd.concat([res.drop('INFO', axis=1), info_field_values], axis=1)
+    #res = pd.concat([res.drop(['FORMAT', 'SAMPLE'], axis=1), format_field_values], axis=1)
     log.logit(f"Finished formatting INFO and FORMAT columns...")
     res['key'] = res['CHROM'] + ':' + res['POS'].astype(str) + ':' + res['REF'] + ':' + res['ALT'] #Key needed to get VariantID
     res['FILTER'] = res['FILTER'].str.split(";")

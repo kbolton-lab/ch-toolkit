@@ -200,13 +200,14 @@ def import_pon_pileup(pileup_db, variant_db, pon_pileup, batch_number, debug, cl
               required=True,
               help="Type of VCF file to import")
 @click.option('--batch-number', '-b', type=click.INT, required=True, help="The batch number of this variant set")
+@click.option('--by_chromosome', '-c', is_flag=True, show_default=True, default=False, required=True, help="By chromosome or all at once")
 @click.option('--debug', '-d', is_flag=True, show_default=True, default=False, required=True, help="Print extra debugging output")
-def calculate_fishers_test(pileup_db, caller_db, caller, batch_number, debug):
+def calculate_fishers_test(pileup_db, caller_db, caller, batch_number, by_chromosome, debug):
     """
     Calculates the Fisher's Exact Test for all Variants within the Variant Caller duckdb
     """
     import ch.vdbtools.process as process
-    process.annotate_fisher_test(pileup_db, caller_db, caller, batch_number, debug)
+    process.annotate_fisher_test(pileup_db, caller_db, caller, batch_number, by_chromosome, debug)
     log.logit(f"---> Successfully calculated the Fisher's Exact Test for variants within ({batch_number}) and {caller_db}", color="green")
 
 @cli.command('import-vep', short_help="updates variants inside duckdb with VEP information")
@@ -253,11 +254,40 @@ def import_annotate_pd(annotation_db, annotate_pd, batch_number, debug):
 @click.option('--mcdb', 'mutect_db', type=click.Path(exists=True), required=True, help="The mutect database")
 @click.option('--vcdb', 'vardict_db', type=click.Path(exists=True), required=True, help="The vardict database")
 @click.option('--adb', 'annotation_db', type=click.Path(exists=True), required=True, help="The annotation database")
+@click.option('--prefix', '-p', type=click.STRING, default="ch_pd", help="The output prefix e.g. <prefix>.all.csv")
 @click.option('--debug', '-d', is_flag=True, show_default=True, default=False, required=True, help="Print extra debugging output")
-def dump_ch_variants(mutect_db, vardict_db, annotation_db, debug):
+def dump_ch_variants(mutect_db, vardict_db, annotation_db, prefix, debug):
     """
     Combines all information and outputs CH Variants
     """
     import ch.vdbtools.dump as dump
-    dump.dump_ch_variants(mutect_db, vardict_db, annotation_db, debug)
+    dump.dump_ch_variants(mutect_db, vardict_db, annotation_db, prefix, debug)
     log.logit(f"---> Successfully dumped CH Variants", color="green")
+
+@cli.command('reduce-db', short_help="Reduces the size of the mutect_db and vardict_db databases to only CH possible variants")
+@click.option('--cdb', 'caller_db', type=click.Path(exists=True), required=True, help="The mutect or vardict database")
+@click.option('--caller', 'caller',
+              type=click.Choice(['mutect', 'vardict'], case_sensitive=False),
+              required=True,
+              help="Select between: mutect or vardict")
+@click.option('--adb', 'annotation_db', type=click.Path(exists=True), required=True, help="The annotation database")
+@click.option('--batch-number', '-b', type=click.INT, default=None, help="The batch number in case only want chromosome database for a subset")
+@click.option('--threads', 'cores', type=click.INT, required=False, show_default=True, default=1, help="Number of Threads used for parallelization")
+@click.option('--chromosome', '-c', type=click.STRING, default=None, help="The chromosome set of interest")
+@click.option('--debug', '-d', is_flag=True, show_default=True, default=False, required=True, help="Print extra debugging output")
+def dump_ch_variants(caller_db, caller, annotation_db, batch_number, chromosome, cores, debug):
+    """
+    Reduces the size of mutect_db and vardict_db to only include possible CH variants
+    """
+    import ch.vdbtools.process as process
+    process.ch_variants_only(caller_db, caller, annotation_db, batch_number, chromosome, cores, debug)
+    if batch_number != None:
+        if chromosome != None:
+            log.logit(f"---> Successfully reduced {caller_db} from batch: {batch_number} for chromosome: {chromosome}", color="green")
+        else:
+            log.logit(f"---> Successfully reduced {caller_db} from batch: {batch_number} for ALL chromosomes", color="green")
+    else:
+        if chromosome != None:
+            log.logit(f"---> Successfully reduced {caller_db} for chromosome: {chromosome}", color="green")
+        else:
+            log.logit(f"---> Successfully reducced {caller_db} for ALL chromosomes", color="green")
