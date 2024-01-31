@@ -2,6 +2,7 @@ import sys, os
 import math
 import duckdb
 import pandas as pd
+import multiprocessing as mp
 import ch.utils.logger as log
 import ch.utils.database as db
 import importlib.resources
@@ -140,6 +141,10 @@ def determine_pathogenicity(df, total_samples, debug):
     df['n.loci.truncating.vep'] = pd.to_numeric(df['n.loci.truncating.vep'], errors='coerce')
     df = df[(df['n_samples'] < bbCutoff) | (df['n.HGVSc'] > 25) | (df['CosmicCount'] > 50)]
 
+    # We previously save all ASXL1 G646W irregardless of gnomAD or Caller Filters because this is a very recurrent variant that may be removed
+    # However, this variant is high enough with HGVSc and CosmicCount to be saved from the n_samples filter, so we want to remove anything less than 0.05% VAF
+    df = df[~(((df['key'] == 'chr20:32434638:A:AG') & (df['average_AF'] <= 0.05)) | ((df['key'] == 'chr20:32434638:A:AGG') & (df['average_AF'] <= 0.05)))]
+
     df[['CHROM', 'POS', 'REF', 'ALT']] = df['key'].str.split(':', expand=True)
     new_order = ['CHROM', 'POS', 'REF', 'ALT'] + [col for col in df.columns if col not in ['CHROM', 'POS', 'REF', 'ALT']]
     df = df.reindex(columns=new_order)
@@ -185,7 +190,8 @@ def determine_pathogenicity(df, total_samples, debug):
     missense_mutation = pd.Series(["missense_variant", "inframe_deletion", "inframe_insertion"])
     SF3B1_positions = pd.Series([622, 623, 624, 625, 626, 662, 663, 664, 665, 666, 700, 701, 702, 703, 704, 740, 741, 742])
     clinvar_sig_terms = pd.Series(["Likely_pathogenic", "Pathogenic", "Pathogenic/Likely_pathogenic", "Pathogenic/Likely_pathogenic|risk_factor", "Pathogenic|drug_response|other"])
-    splicingSynonymous = pd.Series([",".join(["splice_donor_5th_base_variant", "splice_donor_region_variant", "splice_region_variant", "splice_polypyrimidine_tract_variant", "synonymous_variant"])])
+    splicingSynonymous = pd.Series(["splice_donor_5th_base_variant", "splice_donor_region_variant", "splice_polypyrimidine_tract_variant", "splice_region_variant,intron_variant", "splice_region_variant,non_coding_transcript_exon_variant", "synonymous_variant", "splice_region_variant,synonymous_variant"])
+    #splicingSynonymous = pd.Series(["splice_donor_5th_base_variant,synonymous_variant", "splice_donor_region_variant,synonymous_variant", "splice_region_variant,synonymous_variant", "splice_polypyrimidine_tract_variant,synonymous_variant"])
 
     # Putative Driver Rules
     # ---------------------
@@ -224,9 +230,9 @@ def determine_pathogenicity(df, total_samples, debug):
             (df['Gene'] == "IDH2") & df['VariantClass'].isin(missense_mutation) & ((df['aa.pos'] == 140) | (df['aa.pos'] == 172)),
             (df['Gene'] == "PPM1D") & df['VariantClass'].isin(nonsense_mutation) & (df['EXON'] == "6/6"),
             df['Gene'].isin(gene_list) & df['VariantClass'].isin(missense_mutation) & (df['n.HGVSp'] >= 1) & (df['SIFT'].str.contains("deleterious") | df['PolyPhen'].str.contains("damaging")),
-            df['Gene'].isin(TSG_gene_list) & df['VariantClass'].isin(["splice_donor_variant", "splice_aceptor_variant", "splice_region_variant"]) & ~(df['Consequence'].isin(splicingSynonymous)),
+            df['Gene'].isin(TSG_gene_list) & df['VariantClass'].isin(["splice_donor_variant", "splice_acceptor_variant", "splice_region_variant"]) & ~(df['Consequence'].str.contains('|'.join(splicingSynonymous))),
             df['Gene'].isin(TSG_gene_list) & df['clinvar_CLNSIG'].isin(clinvar_sig_terms),
-            df['Gene'].isin(gene_list) & df['Consequence'].isin(splicingSynonymous),
+            df['Gene'].isin(gene_list) & df['Consequence'].str.contains('|'.join(splicingSynonymous)),
             (df['Gene'] == "ZBTB33") & df['VariantClass'].isin(missense_mutation) & df['AAchange'].isin(ZBTB33),
             df['Gene'].isin(bickGene['Gene'].unique()) & df['VariantClass'].isin(nonsense_mutation)
         ],
@@ -253,13 +259,14 @@ def determine_pathogenicity(df, total_samples, debug):
         default="Not PD"
     )
     # OncoKB API automatically classifies ALL splicing mutations as oncogenic, however if the mutation is synonymous, then we have to change it
-    df.loc[(df['oncoKB'].str.contains("Oncogenic")) & (df['Consequence'].isin(splicingSynonymous)) & ~(df['clinvar_CLNSIG'].isin(clinvar_sig_terms)), 'pd_reason'] = "Not PD"
+    df.loc[(df['oncoKB'].str.contains("Oncogenic")) & df['Consequence'].str.contains('|'.join(splicingSynonymous)) & ~(df['clinvar_CLNSIG'].isin(clinvar_sig_terms)), 'pd_reason'] = "Not PD"
     df['putative_driver'] = np.where(df['pd_reason'] != "Not PD", 1, 0)
 
     # SpliceAI
     if 'SpliceAI_pred' in df.columns:
-        df[['SpliceAI_pred_SYMBOL', 'SpliceAI_pred_DS_AG', 'SpliceAI_pred_DS_AL', 'SpliceAI_pred_DS_DG', 'SpliceAI_pred_DS_DL', 'SpliceAI_pred_DP_AG', 'SpliceAI_pred_DP_AL', 'SpliceAI_pred_DP_DG', 'SpliceAI_pred_DP_DL']] = df['SpliceAI_pred'].str.split('|', expand=True)
-        df[['SpliceAI_pred_DS_AG', 'SpliceAI_pred_DS_AL', 'SpliceAI_pred_DS_DG', 'SpliceAI_pred_DS_DL', 'SpliceAI_pred_DP_AG', 'SpliceAI_pred_DP_AL', 'SpliceAI_pred_DP_DG', 'SpliceAI_pred_DP_DL']] = df[['SpliceAI_pred_DS_AG', 'SpliceAI_pred_DS_AL', 'SpliceAI_pred_DS_DG', 'SpliceAI_pred_DS_DL', 'SpliceAI_pred_DP_AG', 'SpliceAI_pred_DP_AL', 'SpliceAI_pred_DP_DG', 'SpliceAI_pred_DP_DL']].apply(pd.to_numeric)
+        if (df['SpliceAI_pred'] != "-").all():
+            df[['SpliceAI_pred_SYMBOL', 'SpliceAI_pred_DS_AG', 'SpliceAI_pred_DS_AL', 'SpliceAI_pred_DS_DG', 'SpliceAI_pred_DS_DL', 'SpliceAI_pred_DP_AG', 'SpliceAI_pred_DP_AL', 'SpliceAI_pred_DP_DG', 'SpliceAI_pred_DP_DL']] = df['SpliceAI_pred'].str.split('|', expand=True)
+            df[['SpliceAI_pred_DS_AG', 'SpliceAI_pred_DS_AL', 'SpliceAI_pred_DS_DG', 'SpliceAI_pred_DS_DL', 'SpliceAI_pred_DP_AG', 'SpliceAI_pred_DP_AL', 'SpliceAI_pred_DP_DG', 'SpliceAI_pred_DP_DL']] = df[['SpliceAI_pred_DS_AG', 'SpliceAI_pred_DS_AL', 'SpliceAI_pred_DS_DG', 'SpliceAI_pred_DS_DL', 'SpliceAI_pred_DP_AG', 'SpliceAI_pred_DP_AL', 'SpliceAI_pred_DP_DG', 'SpliceAI_pred_DP_DL']].apply(pd.to_numeric)
 
     # Start of Review
     df['Review'] = "No Review"
@@ -525,16 +532,120 @@ def ch_to_df(temp_connection, mutect_db, vardict_db, annotation_db, debug):
     log.logit(f"{length} variants are identified to be CH mutations")
     return total_sample, df
 
-def dump_ch_variants(mutect_db, vardict_db, annotation_db, debug):
-    temp_connection = db.duckdb_connect_rw("temp_chpd.db", True)
+def dump_ch_variants(mutect_db, vardict_db, annotation_db, prefix, debug):
+    temp_connection = db.duckdb_connect_rw(f"temp_{prefix}.db", True)
     total_sample, df = ch_to_df(temp_connection, mutect_db, vardict_db, annotation_db, debug)
     temp_connection.close()
-    os.remove("temp_chpd.db")
+    os.remove(f"temp_{prefix}.db")
     review_df, pass_df, df = determine_pathogenicity(df, total_sample, debug)
     length = len(df)
     #print(df)
-    df.to_csv(f"ch_pd.all.csv", index=False, mode='w')
-    review_df.to_csv(f"ch_pd.review.csv", index=False, mode='w')
-    pass_df.to_csv(f"ch_pd.pass.csv", index=False, mode='w')
+    df.to_csv(f"{prefix}.all.csv", index=False, mode='w')
+    review_df.to_csv(f"{prefix}.review.csv", index=False, mode='w')
+    pass_df.to_csv(f"{prefix}.pass.csv", index=False, mode='w')
     log.logit(f"{length} variants are putative drivers")
     return df
+
+def create_caller_filtered(connection, caller, chrom, outfile, debug):
+    if caller.lower() == "mutect":
+        sql = f"""
+            CREATE TABLE mutect_filtered AS
+            WITH p AS (
+                SELECT variant_id
+                FROM annotation_db.pd
+                WHERE key LIKE '{chrom}:%'
+            ),
+            mchr AS (
+                SELECT *
+                FROM caller_db.mutect
+                WHERE key LIKE '{chrom}:%' AND (
+                (
+                    mutect_filter = '[PASS]' OR (
+                    (
+                        mutect_filter = '[weak_evidence]' OR
+                        mutect_filter = '[strand_bias]' OR
+                        mutect_filter = '[weak_evidence, strand_bias]' OR
+                        mutect_filter = '[strand_bias, weak_evidence]'
+                    ) 
+                    )
+                ) AND
+                pon_2at2_percent is NULL AND
+                format_af >= 0.001 
+                ) OR (key = 'chr20:32434638:A:AG' OR key = 'chr20:32434638:A:AGG')
+            )
+            SELECT * 
+            FROM mchr
+            WHERE mchr.variant_id IN (
+                SELECT variant_id
+                FROM p
+            );
+
+            COPY (
+                SELECT *
+                FROM mutect_filtered
+            ) TO '{outfile}.parquet' (FORMAT 'PARQUET');
+        """
+    elif caller.lower() == "vardict":
+        sql = f"""
+            CREATE TABLE vardict_filtered AS
+            WITH p AS (
+                SELECT variant_id
+                FROM annotation_db.pd
+                WHERE key LIKE '{chrom}:%'
+            ),
+            vchr AS (
+                SELECT *
+                FROM caller_db.vardict
+                WHERE key LIKE '{chrom}:%' AND
+                (
+                    vardict_filter = '[PASS]' AND
+                    pon_2at2_percent is NULL AND
+                    format_af >= 0.001
+                ) OR (key = 'chr20:32434638:A:AG' OR key = 'chr20:32434638:A:AGG')
+            )
+            SELECT * 
+            FROM vchr
+            WHERE vchr.variant_id IN (
+                SELECT variant_id
+                FROM p
+            );
+
+            COPY (
+                SELECT *
+                FROM vardict_filtered
+            ) TO '{outfile}.parquet' (FORMAT 'PARQUET');
+        """
+    else:
+        log.logit(f"ERROR: The caller you selected does not exist")
+        exit(1)
+    if debug: log.logit(f"Executing: {sql}")
+    connection.execute(sql)
+
+#! Testing - Idea is for this function to decrease size of mutect and vardict
+def ch_variants_only(caller_db, base_db, caller, annotation_db, chrom, debug):
+    log.logit(f"Creating EXOME ONLY {caller_db} for {chrom}...")
+    base_output = f"exome.{chrom}"
+    temp_connection = db.duckdb_connect_rw(f"{base_db}.{base_output}.db", True)
+    temp_connection.execute("PRAGMA memory_limit='16GB'")
+    temp_connection.execute(f"ATTACH \'{caller_db}\' as caller_db (READ_ONLY)")
+    temp_connection.execute(f"ATTACH \'{annotation_db}\' as annotation_db (READ_ONLY)")
+    with indent(4, quote=' >'):
+        log.logit(f"Creating the filtered {caller} parquet file...")
+        create_caller_filtered(temp_connection, caller, chrom, f"{base_db}.{base_output}", debug)
+    temp_connection.execute("DETACH caller_db;")       
+    temp_connection.execute("DETACH annotation_db;")
+    temp_connection.close()
+    log.logit(f"Finished creating: {base_db}.{base_output}.parquet")
+    os.remove(f"{base_db}.{base_output}.db")
+
+def merge_ch_variants(base_db, caller):
+    # Assuming that the above function creates parquet files...
+    log.logit(f"Creating: {base_db}.exome.db from {base_db}.exome.*.parquet files")
+    connection = db.duckdb_connect_rw(f"{base_db}.exome.db", True)
+    connection.execute("PRAGMA memory_limit='16GB'")
+    import ch.vdbtools.handlers.callers as callers
+    callers.setup_caller_tbl(connection, caller)
+    sql = f"INSERT INTO {caller} SELECT * FROM read_parquet('{base_db}.exome.*.parquet')"
+    connection.execute(sql)
+    log.logit(f"Finished creating {base_db}.exome.db")
+    connection.close()
