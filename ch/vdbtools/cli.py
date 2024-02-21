@@ -255,13 +255,14 @@ def import_annotate_pd(annotation_db, annotate_pd, batch_number, debug):
 @click.option('--vcdb', 'vardict_db', type=click.Path(exists=True), required=True, help="The vardict database")
 @click.option('--adb', 'annotation_db', type=click.Path(exists=True), required=True, help="The annotation database")
 @click.option('--prefix', '-p', type=click.STRING, default="ch_pd", help="The output prefix e.g. <prefix>.all.csv")
+@click.option('--pvalue', '-v', type=click.FLOAT, default=1.260958e-09, help="The p-value cut-off value for the Fisher's exact test for the PoN")
 @click.option('--debug', '-d', is_flag=True, show_default=True, default=False, required=True, help="Print extra debugging output")
-def dump_ch_variants(mutect_db, vardict_db, annotation_db, prefix, debug):
+def dump_ch_variants(mutect_db, vardict_db, annotation_db, prefix, pvalue, debug):
     """
     Combines all information and outputs CH Variants
     """
     import ch.vdbtools.dump as dump
-    dump.dump_ch_variants(mutect_db, vardict_db, annotation_db, prefix, debug)
+    dump.dump_ch_variants(mutect_db, vardict_db, annotation_db, prefix, pvalue, debug)
     log.logit(f"---> Successfully dumped CH Variants", color="green")
 
 @cli.command('reduce-db', short_help="Reduces the size of the mutect_db and vardict_db databases to only CH possible variants")

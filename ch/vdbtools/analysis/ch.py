@@ -27,7 +27,7 @@ def load_flat_databases():
     ct['CHROM.POS'] = ct['CHROM'] + '_' + ct['POS'].astype(str)
     ct['GENE.AA.POS'] = ct['gene'] + '_' + ct['aa.pos'].astype(str)
     ct['gene_cDNAchange'] = ct['gene'] + '_' + ct['cDNAchange']
-    ct['gene_aachange'] = ct['gene'] + '_' + vars['AAchange']
+    ct['gene_aachange'] = ct['gene'] + '_' + ct['AAchange']
 
     bickGene = pd.read_csv(pd_table, sep='\t')
     bickGene = bickGene[bickGene['source'] == 'Bick_email']
@@ -143,7 +143,7 @@ def determine_pathogenicity(df, total_samples, debug):
 
     # We previously save all ASXL1 G646W irregardless of gnomAD or Caller Filters because this is a very recurrent variant that may be removed
     # However, this variant is high enough with HGVSc and CosmicCount to be saved from the n_samples filter, so we want to remove anything less than 0.05% VAF
-    df = df[~(((df['key'] == 'chr20:32434638:A:AG') & (df['average_AF'] <= 0.05)) | ((df['key'] == 'chr20:32434638:A:AGG') & (df['average_AF'] <= 0.05)))]
+    df = df[~(((df['key'] == 'chr20:32434638:A:AG') & (df['average_af'] <= 0.05)) | ((df['key'] == 'chr20:32434638:A:AGG') & (df['average_af'] <= 0.05)))]
 
     df[['CHROM', 'POS', 'REF', 'ALT']] = df['key'].str.split(':', expand=True)
     new_order = ['CHROM', 'POS', 'REF', 'ALT'] + [col for col in df.columns if col not in ['CHROM', 'POS', 'REF', 'ALT']]
@@ -156,8 +156,8 @@ def determine_pathogenicity(df, total_samples, debug):
     df['aa.pos'] = df['AAchange'].str.extract(r'(\d+)').astype(float)
     df['near.BB.loci.HS'] = df.apply(lambda row: near_BB_loci_HS(row, vars) if not pd.isna(row['aa.pos']) else "", axis=1)
     df['near.COSMIC.loci.HS'] = df.apply(lambda row: near_COSMIC_loci_HS(row, ct) if not pd.isna(row['aa.pos']) else "", axis=1)
-    df['nearBBLogic'] = df['near.BB.loci.HS'] == ''
-    df['nearCosmicHemeLogic'] = df['near.COSMIC.loci.HS'] == ''
+    df['nearBBLogic'] = df['near.BB.loci.HS'] != ''
+    df['nearCosmicHemeLogic'] = df['near.COSMIC.loci.HS'] != ''
     
     # Recurrent Proportion
     #total_samples = 48212           # This is inside the CCDG
@@ -269,44 +269,37 @@ def determine_pathogenicity(df, total_samples, debug):
             df[['SpliceAI_pred_DS_AG', 'SpliceAI_pred_DS_AL', 'SpliceAI_pred_DS_DG', 'SpliceAI_pred_DS_DL', 'SpliceAI_pred_DP_AG', 'SpliceAI_pred_DP_AL', 'SpliceAI_pred_DP_DG', 'SpliceAI_pred_DP_DL']] = df[['SpliceAI_pred_DS_AG', 'SpliceAI_pred_DS_AL', 'SpliceAI_pred_DS_DG', 'SpliceAI_pred_DS_DL', 'SpliceAI_pred_DP_AG', 'SpliceAI_pred_DP_AL', 'SpliceAI_pred_DP_DG', 'SpliceAI_pred_DP_DL']].apply(pd.to_numeric)
 
     # Start of Review
-    df['Review'] = "No Review"
+    df['Review'] = ""
 
     # Split Protein_position into beginning and end
     df['Protein_position_start'] = pd.to_numeric(np.where(df['Protein_position'].str.contains('-'), df['Protein_position'].str.split('-').str[0], df['Protein_position']), errors='coerce')
     df['Protein_position_end'] = pd.to_numeric(np.where(df['Protein_position'].str.contains('-'), df['Protein_position'].str.split('-').str[1], df['Protein_position']), errors='coerce')
 
     # If it is an Inframe Insertion or Deletion that OVERLAPS P95, then mark for review
-    df['Review'] = np.where((df['Review'] == "No Review") & (df['Gene'] == "SRSF2") & (df['VariantClass'].isin(["inframe_deletion", "inframe_insertion"])) & (df['Protein_position_start'].astype(float) <= 95) & (df['Protein_position_end'].astype(float) >= 95), "MW Review", df['Review'])
+    df['Review'] = np.where((df['Gene'] == "SRSF2") & (df['VariantClass'].isin(["inframe_deletion", "inframe_insertion"])) & (df['Protein_position_start'].astype(float) <= 95) & (df['Protein_position_end'].astype(float) >= 95), "MW Review", df['Review'])
 
     # For SRSF2, SF3B1, IDH1, IDH2, and JAK2 (If not already identified as PD or review... remove all other variants)
     SSIIJ = pd.Series(["SRSF2", "SF3B1", "IDH1", "IDH2", "JAK2"])
-    df = df[~((df['Gene'].isin(SSIIJ)) & (df['putative_driver'] == 0) & (df['Review'] == "No Review"))]
+    df = df[~((df['Gene'].isin(SSIIJ)) & (df['putative_driver'] == 0) & (df['Review'] == ""))]
 
     unique_genes = bickGene[bickGene['Gene'] != "ZBTB33"]['Gene'].unique()
     conditions = [
-        ((df['Review'] == "No Review") & (df['REF'].str.len() > 5) | (df['ALT'].str.len() > 5), "Long INDEL"),
-        ((df['Review'] != "No Review") & (df['REF'].str.len() > 5) | (df['ALT'].str.len() > 5), ";Long INDEL"),
-        ((df['Review'] == "No Review") & (df['REF'].str.len() >= 2) & (df['ALT'].str.len() >= 2), "Complex INDEL"),
-        ((df['Review'] != "No Review") & (df['REF'].str.len() >= 2) & (df['ALT'].str.len() >= 2), ";Complex INDEL"),
-        ((df['Review'] == "No Review") & (df['average_af'] >= 0.2), "High VAF"),
-        ((df['Review'] != "No Review") & (df['average_af'] >= 0.2), ";High VAF"),
-        ((df['Review'] == "No Review") & (df['Gene'].isin(gene_list)) & (df['VariantClass'].isin(missense_mutation)) & (df['homopolymerCase'] != ""), "Homopolymer Region"),
-        ((df['Review'] != "No Review") & (df['Gene'].isin(gene_list)) & (df['VariantClass'].isin(missense_mutation)) & (df['homopolymerCase'] != ""), ";Homopolymer Region"),
-        ((df['Review'] == "No Review") & (df['Gene'].isin(gene_list)) & (df['VariantClass'].isin(missense_mutation)) & (df['SIFT'].str.contains("deleterious")) & (df['PolyPhen'].str.contains("damaging")) & (df['putative_driver'] == 0) & (df['n.HGVSc'] >= 1), "B/B Missense Review"),
-        ((df['Review'] != "No Review") & (df['Gene'].isin(gene_list)) & (df['VariantClass'].isin(missense_mutation)) & (df['SIFT'].str.contains("deleterious")) & (df['PolyPhen'].str.contains("damaging")) & (df['putative_driver'] == 0) & (df['n.HGVSc'] >= 1), ";B/B Missense Review"),
-        ((df['Review'] == "No Review") & (df['Gene'].isin(gene_list)) & (df['VariantClass'].isin(missense_mutation)) & (df['SIFT'].str.contains("deleterious")) & (df['PolyPhen'].str.contains("damaging")) & (df['putative_driver'] == 0), "S/P Missense Review"),
-        ((df['Review'] != "No Review") & (df['Gene'].isin(gene_list)) & (df['VariantClass'].isin(missense_mutation)) & (df['SIFT'].str.contains("deleterious")) & (df['PolyPhen'].str.contains("damaging")) & (df['putative_driver'] == 0), ";S/P Missense Review"),
-        ((df['Review'] == "No Review") & (df['Gene'].isin(gene_list)) & (df['VariantClass'].isin(missense_mutation)) & ((df['nearBBLogic']) | (df['nearCosmicHemeLogic'])) & ((df['SIFT'].str.contains("deleterious")) | (df['PolyPhen'].str.contains("damaging"))) & (df['putative_driver'] == 0), "NHS Missense Review"),
-        ((df['Review'] != "No Review") & (df['Gene'].isin(gene_list)) & (df['VariantClass'].isin(missense_mutation)) & ((df['nearBBLogic']) | (df['nearCosmicHemeLogic'])) & ((df['SIFT'].str.contains("deleterious")) | (df['PolyPhen'].str.contains("damaging"))) & (df['putative_driver'] == 0), ";NHS Missense Review"),
-        ((df['Review'] == "No Review") & (df['Gene'].isin(gene_list)) & (df['VariantClass'].isin(missense_mutation)) & ((df['n.loci.vep'] - df['n.loci.truncating.vep']) >= 5) & ((df['SIFT'].str.contains("deleterious")) | (df['PolyPhen'].str.contains("damaging"))) & (df['putative_driver'] == 0), "HS Missense Review"),
-        ((df['Review'] != "No Review") & (df['Gene'].isin(gene_list)) & (df['VariantClass'].isin(missense_mutation)) & ((df['n.loci.vep'] - df['n.loci.truncating.vep']) >= 5) & ((df['SIFT'].str.contains("deleterious")) | (df['PolyPhen'].str.contains("damaging"))) & (df['putative_driver'] == 0), ";HS Missense Review"),
-        ((df['Review'] == "No Review") & (df['n_samples'] > 5) & (df['n.HGVSc'] < 25) & (df['CosmicCount'] < 50), "Recurrent"),
-        ((df['Review'] != "No Review") & (df['n_samples'] > 5) & (df['n.HGVSc'] < 25) & (df['CosmicCount'] < 50), ";Recurrent"),
-        ((df['Review'] == "No Review") & (df['Gene'].isin(unique_genes)), "Bick's Email"),
-        ((df['Review'] != "No Review") & (df['Gene'].isin(unique_genes)), ";Bick's Email")
+        ((df['REF'].str.len() > 5) | (df['ALT'].str.len() > 5), "Long INDEL"),
+        ((df['REF'].str.len() >= 2) & (df['ALT'].str.len() >= 2), "Complex INDEL"),
+        ((df['average_af'] >= 0.2), "High VAF"),
+        ((df['Gene'].isin(gene_list)) & (df['VariantClass'].isin(missense_mutation)) & (df['homopolymerCase'] != ""), "Homopolymer Region"),
+        ((df['Gene'].isin(gene_list)) & (df['VariantClass'].isin(missense_mutation)) & (df['SIFT'].str.contains("deleterious")) & (df['PolyPhen'].str.contains("damaging")) & (df['putative_driver'] == 0) & (df['n.HGVSc'] >= 1), "B/B Missense Review"),
+        ((df['Gene'].isin(gene_list)) & (df['VariantClass'].isin(missense_mutation)) & (df['SIFT'].str.contains("deleterious")) & (df['PolyPhen'].str.contains("damaging")) & (df['putative_driver'] == 0), "S/P Missense Review"),
+        ((df['Gene'].isin(gene_list)) & (df['VariantClass'].isin(missense_mutation)) & ((df['nearBBLogic']) | (df['nearCosmicHemeLogic'])) & ((df['SIFT'].str.contains("deleterious")) | (df['PolyPhen'].str.contains("damaging"))) & (df['putative_driver'] == 0), "NHS Missense Review"),
+        ((df['Gene'].isin(gene_list)) & (df['VariantClass'].isin(missense_mutation)) & ((df['n.loci.vep'] - df['n.loci.truncating.vep']) >= 5) & ((df['SIFT'].str.contains("deleterious")) | (df['PolyPhen'].str.contains("damaging"))) & (df['putative_driver'] == 0), "HS Missense Review"),
+        ((df['n_samples'] > 5) & (df['n.HGVSc'] < 25) & (df['CosmicCount'] < 50), "Recurrent"),
+        ((df['Gene'].isin(unique_genes)), "Bick's Email")
     ]
     for condition, label in conditions:
-        df['Review'] = np.where(condition, label, df['Review'])
+        df.loc[condition, 'Review'] = df.loc[condition, 'Review'] + '|' + label
+
+    # If Review is still empty, then give it No Review
+    df['Review'].replace("", "No Review", inplace=True)
 
     # If something is ONLY in Review because it was recurrent, we can auto pass it if the recurrence wasn't that significant
     # 2.69745405 - chr4:105236829:C:T       <-- These numbers come from UKBB
@@ -341,9 +334,9 @@ def determine_pathogenicity(df, total_samples, debug):
         ((df['Review'] == "Recurrent") & (df['putative_driver'] == 1)) |
         ((df['Review'].str.contains("Homopolymer Region")) & (df['putative_driver'] == 1)) |
         ((df['Review'].str.contains("Bick's Email")) & (df['putative_driver'] == 1)) |
-        ((df['Review'].str.contains("Missense Review")) & (df['putative_driver'] == 0)) |
-        ((df['Review'].str.contains("MW Review")) & (df['putative_driver'] == 0)) |
-        ((df['Review'].str.contains("Splice Region Variant")) & (df['putative_driver'] == 0))
+        ((df['Review'].str.contains("MW Review")) & (df['putative_driver'] == 0)) #|
+        #((df['Review'].str.contains("Missense Review")) & (df['putative_driver'] == 0)) |
+        #((df['Review'].str.contains("Splice Region Variant")) & (df['putative_driver'] == 0))
     ]
 
     pass_df = df.loc[
@@ -378,7 +371,7 @@ def determine_pathogenicity(df, total_samples, debug):
 # - Median VAF <= 0.35 if Average VAF > 0.25 (At least 2 Samples) <- For Tumors add the B/B and COSMIC
 # - Calculate N Samples
 # - PoN Edge Case of 0
-def ch_to_df(temp_connection, mutect_db, vardict_db, annotation_db, debug):
+def ch_to_df(temp_connection, mutect_db, vardict_db, annotation_db, pvalue, debug):
     log.logit(f"Processing variants from databases...")
     temp_connection.execute("PRAGMA memory_limit='16GB'")
     temp_connection.execute(f"ATTACH \'{mutect_db}\' as mutect_db (READ_ONLY)")
@@ -403,7 +396,7 @@ def ch_to_df(temp_connection, mutect_db, vardict_db, annotation_db, debug):
         temp_connection.execute(sql)
         temp_connection.execute("DETACH annotation_db;")
         log.logit(f"Creating the mutect_filtered table...")
-        sql = """
+        sql = f"""
         CREATE TABLE mutect_filtered AS
         SELECT *
         FROM mutect_db.mutect as m
@@ -430,6 +423,7 @@ def ch_to_df(temp_connection, mutect_db, vardict_db, annotation_db, debug):
             ) AND
                 pon_2at2_percent is NULL AND
                 format_af >= 0.001 AND
+                fisher_p_value <= {pvalue} AND
                 m.variant_id IN (
                     SELECT variant_id
                     FROM pd_filtered
@@ -440,7 +434,7 @@ def ch_to_df(temp_connection, mutect_db, vardict_db, annotation_db, debug):
         temp_connection.execute(sql)
         temp_connection.execute("DETACH mutect_db;")
         log.logit(f"Creating the vardict_filtered table...")
-        sql = """
+        sql = f"""
         CREATE TABLE vardict_filtered AS
         SELECT *
         FROM vardict_db.vardict
@@ -448,6 +442,7 @@ def ch_to_df(temp_connection, mutect_db, vardict_db, annotation_db, debug):
             vardict_filter = '[PASS]' AND
             pon_2at2_percent is NULL AND
             format_af >= 0.001 AND
+            fisher_p_value <= {pvalue} AND
             variant_id IN (
                 SELECT variant_id
                 FROM pd_filtered
@@ -517,7 +512,8 @@ def ch_to_df(temp_connection, mutect_db, vardict_db, annotation_db, debug):
         );
     """
     #COPY () TO 'ch_pd.csv' (HEADER, DELIMITER ',');
-    #AND fisher_p_value <= 1.260958e-09
+    #AND fisher_p_value <= 1.260958e-09           <- UKBB Exome
+    #AND fisher_p_value <= 2.345643e-9      <- ONLY CH_PD GeneList
     # NOT (
     #     (format_alt_fwd / (format_alt_fwd + format_alt_rev)) > 0.9 OR (format_alt_fwd / (format_alt_fwd + format_alt_rev)) < 0.1 AND
     #     (format_alt_rev / (format_alt_fwd + format_alt_rev)) > 0.9 OR (format_alt_rev / (format_alt_fwd + format_alt_rev))
@@ -532,9 +528,13 @@ def ch_to_df(temp_connection, mutect_db, vardict_db, annotation_db, debug):
     log.logit(f"{length} variants are identified to be CH mutations")
     return total_sample, df
 
-def dump_ch_variants(mutect_db, vardict_db, annotation_db, prefix, debug):
+# Possible Function to just calculate the fishers exact test for the dataframe
+def calculate_fishers_exact_for_df(df, debug):
+    return df
+
+def dump_ch_variants(mutect_db, vardict_db, annotation_db, prefix, pvalue, debug):
     temp_connection = db.duckdb_connect_rw(f"temp_{prefix}.db", True)
-    total_sample, df = ch_to_df(temp_connection, mutect_db, vardict_db, annotation_db, debug)
+    total_sample, df = ch_to_df(temp_connection, mutect_db, vardict_db, annotation_db, pvalue, debug)
     temp_connection.close()
     os.remove(f"temp_{prefix}.db")
     review_df, pass_df, df = determine_pathogenicity(df, total_sample, debug)

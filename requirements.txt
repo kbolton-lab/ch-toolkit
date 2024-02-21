@@ -10,3 +10,5 @@ pytz==2023.3
 six==1.16.0
 tzdata==2023.3
 scipy==1.12.0
+llvmlite=0.42.0
+numba=0.59.0

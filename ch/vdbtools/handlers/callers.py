@@ -451,7 +451,7 @@ def annotate_fisher_test(pileup_db, caller_db, caller, batch_number, by_chromoso
         else:
             filter_string = "TRUE"
         sql = f'''
-            CREATE TABLE IF NOT EXISTS fisher_variants AS
+            CREATE TABLE fisher_variants AS
             SELECT c.variant_id, c.sample_id, v.PoN_RefDepth, v.PoN_AltDepth, c.format_ref_fwd, c.format_ref_rev, c.format_alt_fwd, c.format_alt_rev
             FROM caller_db.{caller} c LEFT JOIN pileup.pileup v
             ON c.variant_id = v.variant_id
@@ -466,23 +466,27 @@ def annotate_fisher_test(pileup_db, caller_db, caller, batch_number, by_chromoso
         '''
         if debug: log.logit(f"Executing: {sql}")
         df = temp_connection.execute(sql).df()
+        temp_connection.execute(f"DROP TABLE fisher_variants;")
         if debug: log.logit(f"SQL Complete")
         length = len(df)
         log.logit(f"There were {length} variants without fisher test p-value within {caller_db}")
-        log.logit(f"Calculating Fisher Exact Test for all variants inside {caller_db}")
-        df = fisher_test.pvalue_df(df)
-        caller_connection = db.duckdb_connect_rw(f"{caller_db}", False)
-        log.logit(f"Updating {caller_db} with the fisher's exact test p-values")
-        sql = f"""
-            UPDATE {caller} as c
-            SET fisher_p_value = df.pvalue
-            FROM df
-            WHERE c.variant_id = df.variant_id AND c.sample_id = df.sample_id
-        """
-        caller_connection.sql(sql)
+        if length > 0:
+            log.logit(f"Calculating Fisher Exact Test for all variants inside {caller_db}")
+            df = fisher_test.pvalue_df(df)
+            caller_connection = db.duckdb_connect_rw(f"{caller_db}", False)
+            log.logit(f"Updating {caller_db} with the fisher's exact test p-values")
+            sql = f"""
+                UPDATE {caller} as c
+                SET fisher_p_value = df.pvalue
+                FROM df
+                WHERE c.variant_id = df.variant_id AND c.sample_id = df.sample_id
+            """
+            caller_connection.sql(sql)
+            caller_connection.close()
+        else:
+            log.logit(f"There are no variants needed to update within {caller_db}")
     temp_connection.close()
     os.remove(f"temp_fishers.db")
-    caller_connection.close()
     log.logit(f"Finished updating fisher test p-values inside {caller_db}")
     log.logit(f"Done!", color = "green")
 
