@@ -49,10 +49,16 @@ Options:
 Commands:
   calculate-fishers-test  Updates the variants inside Mutect or Vardict tables
                           with p-value from Fisher's Exact Test
+  chromosome-to-caller    Combines all chromosome databases into a single
+                          <Mutect|Vardict> database
+  database-to-chromosome  Splits <Mutect|Vardict|Variant|Annotation|Pileup>
+                          database into individual chromosomes
   dump-annotations        dumps all variant annotations inside duckdb into a
                           CSV file
   dump-ch                 Outputs CH Variants from Database
   dump-variants           dumps all variants inside duckdb into a VCF file
+  dump-variants-pileup    dumps all variants inside duckdb into a VCF file
+                          that needs pileup
   import-annotate-pd      annotates variants with their pathogenicity
   import-pon-pileup       updates variants inside duckdb with PoN pileup
                           information
@@ -65,6 +71,8 @@ Commands:
                           database
   merge-batch-vcf         Combines all sample vcfs databases into a single
                           database
+  reduce-db               Reduces the size of the mutect_db and vardict_db
+                          databases to only CH possible variants
 ```
 
 ### Workflow Diagram
@@ -270,4 +278,42 @@ Commands:
     --mcdb database/mutect.db \
     --vcdb database/vardict.db \
     --adb database/annotations.db
+```
+
+## Additional Helper Functions
+
+### Split Database into Chromosomes for Processing
+|database-to-chromosome||
+|-----------|--------------------------------------------------------------------------------------------------------------------|
+|**Goal:**  | Divide the database into individual chromosome components.  Useful for when the database is too large              |
+|**Input:** | ***mutect.db***, ***vardict.db***, ***annotations.db***, ***variant.db***, ***pileup.db*** databases               |
+|**Output:**| The original database used as input now split into all possible chromosomes from 1-22,X, and Y                     |
+
+```
+  ch-toolkit database-to-chromosome \
+    --db database/variants.db \
+    --which_db variants \
+    --batch-number 1 \
+    --threads 4
+```
+
+### Reducing Variant Databases to Exonic Regions
+|reduce-db||
+|-----------|--------------------------------------------------------------------------------------------------------------------|
+|**Goal:**  | Most CH mutations are only in the exonic regions, when processing, intronic regions may not be necessary           |
+|**Input:** | ***mutect.db*** or ***vardict.db*** and ***annotations.db*** databases                                             |
+|**Output:**| The original database used as input but only containing variants situated within the exonic regions of the genome  |
+
+```
+  ch-toolkit reduce-db \
+    --cdb database/mutect.db \
+    --caller mutect \
+    --adb database/annotations.db \
+    --threads 4
+
+  ch-toolkit reduce-db \
+    --cdb database/vardict.db \
+    --caller vardict \
+    --adb database/annotations.db \
+    --threads 4
 ```
