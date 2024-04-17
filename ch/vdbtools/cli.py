@@ -1,6 +1,7 @@
 import os, sys, signal
 import click
 from clint.textui import puts, colored
+import ch.utils.database as db
 
 from ch.version import __version__
 import ch.utils.logger as log
@@ -96,6 +97,36 @@ def merge_batch_variants(db_path, variant_db, batch_number, debug, clobber):
     importer.import_variant_batch(db_path, variant_db, batch_number, debug, clobber)
     log.logit(f"---> Successfully imported variant batch ({batch_number}) into {variant_db}", color="green")
 
+@cli.command('bcbio-filter', short_help="Filters variants in the Vardict Database using the BCBIO filter")
+@click.option('--vcdb', 'vardict_db', type=click.Path(), required=True, help="Vardict database to calculate the BCBIO filter")
+@click.option('--recalculate', '-r', is_flag=True, show_default=True, default=False, required=True, help="Recalculates the BCBIO Filter String Automatically (Ignores Default Parameters)")
+@click.option('--low-dp-af', 'low_depth_for_allele_frequency', type=click.INT, required=True, show_default=True, default=6, help="Filter cut-off for regions with low coverage for allele frequency")
+@click.option('--total-depth', '--dp', type=click.INT, required=True, show_default=True, default=10, help="Cut-off for what depth is considered low coverage")
+@click.option('--mean-quality-score', '--qual', type=click.INT, required=True, show_default=True, default=30, help="Cut-off for low quality region scores")
+@click.option('--batch-number', '-b', type=click.INT, required=True, help="The batch number of this variant set")
+@click.option('--by_chromosome', '-c', is_flag=True, show_default=True, default=False, required=True, help="By chromosome or all at once")
+@click.option('--debug', '-d', is_flag=True, show_default=True, default=False, required=True, help="Print extra debugging output")
+def bcbio_filter(vardict_db, recalculate, low_depth_for_allele_frequency, total_depth, mean_quality_score, batch_number, by_chromosome, debug):
+    """
+    Performs the BCBIO Filter on the Vardict Database: https://github.com/bcbio/bcbio-nextgen/blob/master/bcbio/variation/vardict.py#L251\n\n
+    The variant_calling.wdl should automatically perform the BCBIO filter. However, if the filter_string was not properly set, this filter can be run at this step.\n
+    As a rule of thumb, parameters for low-dp-af, total-depth, and mean-quality-score are calculated using a small subset then identifying the cut-off for 2% of the left side samples.\n
+    However, if this was not done previously, the --recalculate parameter can be used to do this automatically.\n\n
+    If the user knows what values to use set them using the follow options.
+    """
+    vardict_connection = db.duckdb_connect_ro(vardict_db)
+    check_vardict = vardict_connection.execute(f"SELECT * FROM information_schema.tables WHERE table_name = 'vardict'").fetchall()
+    vardict_connection.close()
+    if len(check_vardict) > 0:
+        import ch.vdbtools.process as process
+        if recalculate:
+            low_depth_for_allele_frequency, total_depth, mean_quality_score = process.recalculate_bcbio_parameters(vardict_db, low_depth_for_allele_frequency, debug)
+        log.logit(f"The BCBIO Filter String is: ((FMT/AF * FMT/DP < {low_depth_for_allele_frequency}) && ((INFO/MQ < 55.0 && INFO/NM > 1.0) || (INFO/MQ < 60.0 && INFO/NM > 2.0) || (FMT/DP < {total_depth}) || (INFO/QUAL < {mean_quality_score})))")
+        process.bcbio_filter(vardict_db, low_depth_for_allele_frequency, total_depth, mean_quality_score, batch_number, by_chromosome, debug)
+        log.logit(f"---> Successfully performed BCBIO filtering of regions with low coverage for allele fractions within (batch {batch_number}) in {vardict_db}", color="green")
+    else:
+        log.logit("ERROR: BCBIO Filter is only needed for the Vardict Database. Please provide the vardict database for --vcdb", color="red")
+
 #! Convert a database into chromosomes
 @cli.command('database-to-chromosome', short_help="Splits <Mutect|Vardict|Variant|Annotation|Pileup> database into individual chromosomes")
 @click.option('--db', 'db', type=click.Path(), required=True, help="The database to split into chromosomes")
@@ -127,7 +158,7 @@ def caller_to_chromosome(db, which_db, batch_number, chromosome, cores, debug):
         else:
             log.logit(f"---> Successfully split {db} into ALL chromosomes", color="green")
 
-#! Convert chromosome split database back into a single caller database
+# TODO: Convert chromosome split database back into a single caller database
 @cli.command('chromosome-to-caller', short_help="Combines all chromosome databases into a single <Mutect|Vardict> database")
 @click.option('--chr-path', '-p', type=click.Path(exists=True), required=True, help="The path to where all the databases to be combined are stored")
 @click.option('--cdb', 'caller_db', type=click.Path(), required=True, help="The caller database to combine the chromosomes")
@@ -204,7 +235,7 @@ def import_pon_pileup(pileup_db, variant_db, pon_pileup, batch_number, debug, cl
 @click.option('--debug', '-d', is_flag=True, show_default=True, default=False, required=True, help="Print extra debugging output")
 def calculate_fishers_test(pileup_db, caller_db, caller, batch_number, by_chromosome, debug):
     """
-    Calculates the Fisher's Exact Test for all Variants within the Variant Caller duckdb
+    Calculates the Fisher's Exact Test for all Variants within the Variant Caller
     """
     import ch.vdbtools.process as process
     process.annotate_fisher_test(pileup_db, caller_db, caller, batch_number, by_chromosome, debug)

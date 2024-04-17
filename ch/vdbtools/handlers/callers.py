@@ -2,6 +2,7 @@ import os, glob, shutil, math
 import duckdb
 import pandas as pd
 import multiprocessing as mp
+import numpy as np
 
 import ch.vdbtools.handlers.vcf as vcf
 import ch.vdbtools.handlers.variants as variants
@@ -488,6 +489,85 @@ def annotate_fisher_test(pileup_db, caller_db, caller, batch_number, by_chromoso
     temp_connection.close()
     os.remove(f"temp_fishers.db")
     log.logit(f"Finished updating fisher test p-values inside {caller_db}")
+    log.logit(f"Done!", color = "green")
+
+def recalculate_bcbio_parameters(vardict_db, low_depth_for_allele_frequency, debug):
+    log.logit(f"Calculating the BCBIO filter parameters for {vardict_db}", color="green")
+    vardict_connection = db.duckdb_connect_ro(vardict_db)
+    vardict_connection.execute("PRAGMA memory_limit='16GB'")
+    if debug: log.logit(f"Grabbing the FMT/AF, FMT/DP, and INFO/QUAL from Vardict")
+    df = vardict_connection.execute(f"SELECT format_af, format_dp, info_qual FROM vardict LIMIT 20000000;").df()
+    vardict_connection.close()
+    if debug: log.logit(f"Calcuating the 2% cut-off for FMT/AF*FMT/DP, FMT/DP, and INFO/QUAL")
+    df['af_dp'] = df['format_af'] * df['format_dp']
+    # The default for this is 6... but I am still not sure if this needs to be adjusted. Have this just in case we need to move it higher
+    low_depth_for_allele_frequency = np.maximum(np.floor(df['af_dp'].quantile(0.02)), low_depth_for_allele_frequency)
+    total_depth = np.floor(df['format_dp'].quantile(0.02))
+    mean_quality_score = np.floor(df['info_qual'].quantile(0.02))
+    log.logit(f"Finished calculating the BCBIO filter parameters for {vardict_db}", color="green") 
+    return low_depth_for_allele_frequency, total_depth, mean_quality_score
+
+def bcbio_filter(vardict_db, low_depth_for_allele_frequency, total_depth, mean_quality_score, batch_number, by_chromosome, debug):
+    if by_chromosome:
+        chromosome = ['chr1', 'chr2', 'chr3', 'chr4', 'chr5', 'chr6', 'chr7', 'chr8', 'chr9', 'chr10', 
+               'chr11', 'chr12', 'chr13', 'chr14', 'chr15', 'chr16', 'chr17', 'chr18', 'chr19', 'chr20', 
+               'chr21', 'chr22', 'chrX', 'chrY']
+    else:
+        chromosome = ['ALL Chromosomes']
+    log.logit(f"Filtering regions with low coverage for allele frequencies within {vardict_db} for batch: {batch_number}")
+    temp_connection = db.duckdb_connect_rw("temp_bcbio.db", False)
+    temp_connection.execute("PRAGMA memory_limit='16GB'")
+    temp_connection.execute(f"ATTACH '{vardict_db}' as vardict_db (READ_ONLY)")
+    for chrom in chromosome:
+        log.logit(f"Processing {chrom}")
+        if by_chromosome:
+            filter_string = f"c.key LIKE '{chrom}:%'"
+        else:
+            filter_string = "TRUE"
+        sql = f"""
+            CREATE TABLE reduced_vardict AS
+            SELECT v.variant_id, v.sample_id, v.vardict_filter, v.format_af, v.format_dp, v.info_mq, v.info_nm, info_qual,
+                   v.vardict_filter AS vardict_filter_new
+            FROM vardict_db.vardict v
+            WHERE v.batch = {batch_number} AND
+            {filter_string};
+
+            UPDATE reduced_vardict
+            SET vardict_filter_new = CASE
+                WHEN vardict_filter_new[-1] = 'BCBIO' THEN vardict_filter_new[:-1]
+                WHEN (format_af * format_dp < {low_depth_for_allele_frequency}) AND
+                    (
+                        (info_mq < 55.0 AND info_nm > 1.0) OR
+                        (info_mq < 60.0 AND info_nm > 2.0) OR
+                        (format_dp < {total_depth}) OR
+                        (info_qual < {mean_quality_score})
+                    ) THEN list_append(vardict_filter_new, 'BCBIO')
+                WHEN len(vardict_filter_new) = 0 THEN list_append(vardict_filter_new, 'PASS')
+                ELSE vardict_filter_new
+            END;
+            
+            SELECT variant_id, sample_id, vardict_filter_new
+            FROM reduced_vardict
+            WHERE vardict_filter != vardict_filter_new;
+        """
+        if debug: log.logit(f"Executing: {sql}")
+        df = temp_connection.execute(sql).df()
+        length = len(df)
+        temp_connection.execute(f"DROP TABLE reduced_vardict;")
+        if debug: log.logit(f"SQL Complete")
+        vardict_connection = db.duckdb_connect_rw(f"{vardict_db}", False)
+        log.logit(f"Updating {length} variants inside {vardict_db} with the BCBIO filter")
+        sql = f"""
+            UPDATE vardict
+            SET vardict_filter = df.vardict_filter_new
+            FROM df
+            WHERE vardict.variant_id = df.variant_id AND vardict.sample_id = df.sample_id
+        """
+        vardict_connection.sql(sql)
+        vardict_connection.close()
+    temp_connection.close()
+    os.remove(f"temp_bcbio.db")
+    log.logit(f"Finished BCBIO filter inside {vardict_db} for batch {batch_number}")
     log.logit(f"Done!", color = "green")
 
 def caller_to_chromosome(caller_db, caller, batch_number, chrom, base_db, debug):

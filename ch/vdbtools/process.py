@@ -6,6 +6,14 @@ def annotate_fisher_test(pileup_db, caller_db, caller, batch_number, by_chromoso
     import ch.vdbtools.handlers.callers as callers
     callers.annotate_fisher_test(pileup_db, caller_db, caller, batch_number, by_chromosome, debug)
 
+def recalculate_bcbio_parameters(vardict_db, low_depth_for_allele_frequency, debug):
+    import ch.vdbtools.handlers.callers as callers
+    return callers.recalculate_bcbio_parameters(vardict_db, low_depth_for_allele_frequency, debug)
+
+def bcbio_filter(vardict_db, low_depth_for_allele_frequency, total_depth, mean_quality_score, batch_number, by_chromosome, debug):
+    import ch.vdbtools.handlers.callers as callers
+    callers.bcbio_filter(vardict_db, low_depth_for_allele_frequency, total_depth, mean_quality_score, batch_number, by_chromosome, debug)
+
 def db_to_chromosome(db, which_db, batch_number, chromosome, cores, debug):
     dispatch = {
         'mutect'  : caller_to_chromosome,
