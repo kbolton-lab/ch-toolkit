@@ -2,4 +2,3 @@ click
 clint
 duckdb
 pandas
-fisher
