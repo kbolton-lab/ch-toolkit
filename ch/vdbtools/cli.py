@@ -20,8 +20,8 @@ def cli():
 @click.option('--samples', '-s', type=click.Path(exists=True), required=True, help="A CSV file with the samples")
 @click.option('--sdb', 'sample_duckdb', type=click.Path(), required=True, help="The duckdb database to store sample information")
 @click.option('--batch-number', '-b', type=click.INT, required=True, help="The batch number of this import set")
-@click.option('--debug', '-d', is_flag=True, show_default=True, default=False, required=True, help="Print extra debugging output")
-@click.option('--clobber', '-f', is_flag=True, show_default=True, default=False, required=True, help="If exists, delete existing duckdb file and then start from scratch")
+@click.option('--debug', '-d', is_flag=True, show_default=True, default=False, required=False, help="Print extra debugging output")
+@click.option('--clobber', '-f', is_flag=True, show_default=True, default=False, required=False, help="If exists, delete existing duckdb file and then start from scratch")
 def import_samples(samples, sample_duckdb, batch_number, debug, clobber):
     """
     Loading samples into duckdb
@@ -36,10 +36,10 @@ def import_samples(samples, sample_duckdb, batch_number, debug, clobber):
               required=True,
               help="Type of VCF file to import")
 @click.option('--input-vcf', 'input_vcf', type=click.Path(exists=True), required=True, help="The VCF to be imported into the database")
-@click.option('--clobber', '-f', is_flag=True, show_default=True, default=False, required=True, help="If exists, delete existing duckdb file and then start from scratch")
 @click.option('--cdb', '-i', 'database', type=click.Path(), required=True, help="The duckdb database to import the caller data")
 @click.option('--batch-number', '-b', type=click.INT, required=True, help="The batch number of this import set")
-@click.option('--debug', '-d', is_flag=True, show_default=True, default=False, required=True, help="Print extra debugging output")
+@click.option('--debug', '-d', is_flag=True, show_default=True, default=False, required=False, help="Print extra debugging output")
+@click.option('--clobber', '-f', is_flag=True, show_default=True, default=False, required=False, help="If exists, delete existing duckdb file and then start from scratch")
 def import_vcf(caller, input_vcf, database, batch_number, clobber, debug):
     """
     variantdb is a path to a sample variant sqlite database.
@@ -59,8 +59,8 @@ def import_vcf(caller, input_vcf, database, batch_number, clobber, debug):
               help="Type of VCF file to import")
 @click.option('--batch-number', '-b', type=click.INT, required=True, help="The batch number of this import set")
 @click.option('--threads', 'cores', type=click.INT, required=False, show_default=True, default=1, help="Number of Threads used for parallelization")
-@click.option('--debug', '-d', is_flag=True, show_default=True, default=False, required=True, help="Print extra debugging output")
-@click.option('--clobber', '-f', is_flag=True, show_default=True, default=False, required=True, help="If exists, delete existing duckdb file and then start from scratch")
+@click.option('--debug', '-d', is_flag=True, show_default=True, default=False, required=False, help="Print extra debugging output")
+@click.option('--clobber', '-f', is_flag=True, show_default=True, default=False, required=False, help="If exists, delete existing duckdb file and then start from scratch")
 def merge_batch_vcf(db_path, caller_db, variant_db, sample_db, caller, batch_number, cores, debug, clobber):
     """
     Ingest the variants in a batch into main variants database
@@ -73,8 +73,8 @@ def merge_batch_vcf(db_path, caller_db, variant_db, sample_db, caller, batch_num
 @click.option('--input-vcf', '-i', 'input_vcf', type=click.Path(exists=True), required=True, help="The VCF to be imported")
 @click.option('--vdb', 'variant_db', type=click.Path(), required=True, help="The variant database to import the VCF into")
 @click.option('--batch-number', '-b', type=click.INT, required=True, help="The batch number of this import set")
-@click.option('--debug', '-d', is_flag=True, show_default=True, default=False, required=True, help="Print extra debugging output")
-@click.option('--clobber', '-f', is_flag=True, show_default=True, default=False, required=True, help="If exists, delete existing duckdb file and then start from scratch")
+@click.option('--debug', '-d', is_flag=True, show_default=True, default=False, required=False, help="Print extra debugging output")
+@click.option('--clobber', '-f', is_flag=True, show_default=True, default=False, required=False, help="If exists, delete existing duckdb file and then start from scratch")
 def import_sample_variants(input_vcf, variant_db, batch_number, debug, clobber):
     """
     Registering variants into the duckdb database.
@@ -87,8 +87,8 @@ def import_sample_variants(input_vcf, variant_db, batch_number, debug, clobber):
 @click.option('--db-path', '-p', type=click.Path(exists=True), required=True, help="The path to where all the databases for this batch is stored")
 @click.option('--vdb', 'variant_db', type=click.Path(), required=True, help="The variant database to import the batch into")
 @click.option('--batch-number', '-b', type=click.INT, required=True, help="The batch number of this import set")
-@click.option('--debug', '-d', is_flag=True, show_default=True, default=False, required=True, help="Print extra debugging output")
-@click.option('--clobber', '-f', is_flag=True, show_default=True, default=False, required=True, help="If exists, delete existing duckdb file and then start from scratch")
+@click.option('--debug', '-d', is_flag=True, show_default=True, default=False, required=False, help="Print extra debugging output")
+@click.option('--clobber', '-f', is_flag=True, show_default=True, default=False, required=False, help="If exists, delete existing duckdb file and then start from scratch")
 def merge_batch_variants(db_path, variant_db, batch_number, debug, clobber):
     """
     Ingest the variants in a batch into main variants database
@@ -99,13 +99,13 @@ def merge_batch_variants(db_path, variant_db, batch_number, debug, clobber):
 
 @cli.command('bcbio-filter', short_help="Filters variants in the Vardict Database using the BCBIO filter")
 @click.option('--vcdb', 'vardict_db', type=click.Path(), required=True, help="Vardict database to calculate the BCBIO filter")
-@click.option('--recalculate', '-r', is_flag=True, show_default=True, default=False, required=True, help="Recalculates the BCBIO Filter String Automatically (Ignores Default Parameters)")
-@click.option('--low-dp-af', 'low_depth_for_allele_frequency', type=click.INT, required=True, show_default=True, default=6, help="Filter cut-off for regions with low coverage for allele frequency")
-@click.option('--total-depth', '--dp', type=click.INT, required=True, show_default=True, default=10, help="Cut-off for what depth is considered low coverage")
-@click.option('--mean-quality-score', '--qual', type=click.INT, required=True, show_default=True, default=30, help="Cut-off for low quality region scores")
+@click.option('--recalculate', '-r', is_flag=True, show_default=True, default=False, required=False, help="Recalculates the BCBIO Filter String Automatically (Ignores Default Parameters)")
+@click.option('--low-dp-af', 'low_depth_for_allele_frequency', type=click.INT, required=False, show_default=True, default=6, help="Filter cut-off for regions with low coverage for allele frequency")
+@click.option('--total-depth', '--dp', type=click.INT, required=True, show_default=False, default=10, help="Cut-off for what depth is considered low coverage")
+@click.option('--mean-quality-score', '--qual', type=click.INT, required=False, show_default=True, default=30, help="Cut-off for low quality region scores")
 @click.option('--batch-number', '-b', type=click.INT, required=True, help="The batch number of this variant set")
-@click.option('--by_chromosome', '-c', is_flag=True, show_default=True, default=False, required=True, help="By chromosome or all at once")
-@click.option('--debug', '-d', is_flag=True, show_default=True, default=False, required=True, help="Print extra debugging output")
+@click.option('--by_chromosome', '-c', is_flag=True, show_default=True, default=False, required=False, help="By chromosome or all at once")
+@click.option('--debug', '-d', is_flag=True, show_default=True, default=False, required=False, help="Print extra debugging output")
 def bcbio_filter(vardict_db, recalculate, low_depth_for_allele_frequency, total_depth, mean_quality_score, batch_number, by_chromosome, debug):
     """
     Performs the BCBIO Filter on the Vardict Database: https://github.com/bcbio/bcbio-nextgen/blob/master/bcbio/variation/vardict.py#L251\n\n
@@ -134,10 +134,10 @@ def bcbio_filter(vardict_db, recalculate, low_depth_for_allele_frequency, total_
               type=click.Choice(['mutect', 'vardict', 'variant', 'annotation', 'pileup'], case_sensitive=False),
               required=True,
               help="The specific database being processed")
-@click.option('--batch-number', '-b', type=click.INT, default=None, help="The batch number in case only want chromosome database for a subset")
+@click.option('--batch-number', '-b', type=click.INT, default=None, required=False, help="The batch number in case only want chromosome database for a subset")
 @click.option('--threads', 'cores', type=click.INT, required=False, show_default=True, default=1, help="Number of Threads used for parallelization")
-@click.option('--chromosome', '-c', type=click.STRING, default=None, help="The chromosome set of interest")
-@click.option('--debug', '-d', is_flag=True, show_default=True, default=False, required=True, help="Print extra debugging output")
+@click.option('--chromosome', '-c', type=click.STRING, default=None, required=False, help="The chromosome set of interest")
+@click.option('--debug', '-d', is_flag=True, show_default=True, default=False, required=False, help="Print extra debugging output")
 def caller_to_chromosome(db, which_db, batch_number, chromosome, cores, debug):
     """
     Splits the <Mutect|Vardit|Variant|Annotation|Pileup> database into individual chromosomes\n
@@ -166,7 +166,7 @@ def caller_to_chromosome(db, which_db, batch_number, chromosome, cores, debug):
               type=click.Choice(['mutect', 'vardict'], case_sensitive=False),
               required=True,
               help="Type of VCF file to import")
-@click.option('--debug', '-d', is_flag=True, show_default=True, default=False, required=True, help="Print extra debugging output")
+@click.option('--debug', '-d', is_flag=True, show_default=True, default=False, required=False, help="Print extra debugging output")
 def chromosome_to_caller(chr_path, caller_db, caller, debug):
     """
     After splitting the caller databases into individual variants to do processing, combine the information into a central system\n
@@ -178,11 +178,11 @@ def chromosome_to_caller(chr_path, caller_db, caller, debug):
 
 @cli.command('dump-variants', short_help="dumps all variants inside duckdb into a VCF file")
 @click.option('--vdb', 'variant_db', type=click.Path(exists=True), required=True, help="The duckdb database to dump the variants from")
-@click.option('--header-type', '-t', type=click.Choice(['simple', 'dummy'], case_sensitive=False), required=True, default="dummy",
+@click.option('--header-type', '-t', type=click.Choice(['simple', 'dummy'], case_sensitive=False), required=False, default="dummy",
                                     help="A pre-existing header type e.g. simple, mutect, vardict, complex, etc.")
 @click.option('--batch-number', '-b', type=click.INT, required=True, help="The batch number of this variant set")
-@click.option('--chromosome', '-c', type=click.STRING, default=None, help="The chromosome set of interest")
-@click.option('--debug', '-d', is_flag=True, show_default=True, default=False, required=True, help="Print extra debugging output")
+@click.option('--chromosome', '-c', type=click.STRING, default=None, required=False, help="The chromosome set of interest")
+@click.option('--debug', '-d', is_flag=True, show_default=True, default=False, required=False, help="Print extra debugging output")
 def dump_variants(variant_db, header_type, batch_number, chromosome, debug):
     """
     Dumps the variants from duckdb into a VCF file
@@ -195,11 +195,11 @@ def dump_variants(variant_db, header_type, batch_number, chromosome, debug):
 @cli.command('dump-variants-pileup', short_help="dumps all variants inside duckdb into a VCF file that needs pileup")
 @click.option('--vdb', 'variant_db', type=click.Path(exists=True), required=True, help="The duckdb database to dump the variants from")
 @click.option('--pdb', 'pileup_db', type=click.Path(exists=True), required=True, help="The pileup database to check which variants need pileup")
-@click.option('--header-type', '-t', type=click.Choice(['simple', 'dummy'], case_sensitive=False), required=True, default="dummy",
+@click.option('--header-type', '-t', type=click.Choice(['simple', 'dummy'], case_sensitive=False), required=False, default="dummy",
                                     help="A pre-existing header type e.g. simple, mutect, vardict, complex, etc.")
 @click.option('--batch-number', '-b', type=click.INT, required=True, help="The batch number of this variant set")
-@click.option('--chromosome', '-c', type=click.STRING, default=None, help="The chromosome set of interest")
-@click.option('--debug', '-d', is_flag=True, show_default=True, default=False, required=True, help="Print extra debugging output")
+@click.option('--chromosome', '-c', type=click.STRING, default=None, required=False, help="The chromosome set of interest")
+@click.option('--debug', '-d', is_flag=True, show_default=True, default=False, required=False, help="Print extra debugging output")
 def dump_variants(variant_db, pileup_db, header_type, batch_number, chromosome, debug):
     """
     Dumps the variants from duckdb into a VCF file
@@ -213,8 +213,8 @@ def dump_variants(variant_db, pileup_db, header_type, batch_number, chromosome, 
 @click.option('--pdb', 'pileup_db', type=click.Path(), required=True, help="The duckdb database to fetch variant ID from")
 @click.option('--pon-pileup', '-p', 'pon_pileup', type=click.Path(exists=True), required=True, help="The pon pileup VCF to be imported into the variant database")
 @click.option('--batch-number', '-b', type=click.INT, required=True, help="The batch number of this variant set")
-@click.option('--debug', '-d', is_flag=True, show_default=True, default=False, required=True, help="Print extra debugging output")
-@click.option('--clobber', '-f', is_flag=True, show_default=True, default=False, required=True, help="If exists, delete existing duckdb file and then start from scratch")
+@click.option('--debug', '-d', is_flag=True, show_default=True, default=False, required=False, help="Print extra debugging output")
+@click.option('--clobber', '-f', is_flag=True, show_default=True, default=False, required=False, help="If exists, delete existing duckdb file and then start from scratch")
 def import_pon_pileup(pileup_db, variant_db, pon_pileup, batch_number, debug, clobber):
     """
     Dumps the panel of normal pileup information from into a pileup duckdb
@@ -231,8 +231,8 @@ def import_pon_pileup(pileup_db, variant_db, pon_pileup, batch_number, debug, cl
               required=True,
               help="Type of VCF file to import")
 @click.option('--batch-number', '-b', type=click.INT, required=True, help="The batch number of this variant set")
-@click.option('--by_chromosome', '-c', is_flag=True, show_default=True, default=False, required=True, help="By chromosome or all at once")
-@click.option('--debug', '-d', is_flag=True, show_default=True, default=False, required=True, help="Print extra debugging output")
+@click.option('--by_chromosome', '-c', is_flag=True, show_default=True, default=False, required=False, help="By chromosome or all at once")
+@click.option('--debug', '-d', is_flag=True, show_default=True, default=False, required=False, help="Print extra debugging output")
 def calculate_fishers_test(pileup_db, caller_db, caller, batch_number, by_chromosome, debug):
     """
     Calculates the Fisher's Exact Test for all Variants within the Variant Caller
@@ -246,8 +246,8 @@ def calculate_fishers_test(pileup_db, caller_db, caller, batch_number, by_chromo
 @click.option('--vdb', 'variant_db', type=click.Path(exists=True), required=True, help="The duckdb database to fetch variant key from")
 @click.option('--vep', '-v', type=click.Path(exists=True), required=True, help="The VEP TSV to be imported into the annotation database")
 @click.option('--batch-number', '-b', type=click.INT, required=True, help="The batch number of this variant set")
-@click.option('--debug', '-d', is_flag=True, show_default=True, default=False, required=True, help="Print extra debugging output")
-@click.option('--clobber', '-f', is_flag=True, show_default=True, default=False, required=True, help="If exists, delete existing duckdb file and then start from scratch")
+@click.option('--debug', '-d', is_flag=True, show_default=True, default=False, required=False, help="Print extra debugging output")
+@click.option('--clobber', '-f', is_flag=True, show_default=True, default=False, required=False, help="If exists, delete existing duckdb file and then start from scratch")
 def import_vep(annotation_db, variant_db, vep, batch_number, debug, clobber):
     """
     Dumps the vep information into an annotation duckdb
@@ -259,7 +259,7 @@ def import_vep(annotation_db, variant_db, vep, batch_number, debug, clobber):
 @cli.command('dump-annotations', short_help="dumps all variant annotations inside duckdb into a CSV file")
 @click.option('--adb', 'annotation_db', type=click.Path(exists=True), required=True, help="The duckdb database to dump the variant annotations from")
 @click.option('--batch-number', '-b', type=click.INT, required=True, help="The batch number of this variant set")
-@click.option('--debug', '-d', is_flag=True, show_default=True, default=False, required=True, help="Print extra debugging output")
+@click.option('--debug', '-d', is_flag=True, show_default=True, default=False, required=False, help="Print extra debugging output")
 def dump_variants_for_annotate_pd(annotation_db, batch_number, debug):
     """
     Dumps the variant annotations from duckdb into a CSV file
@@ -272,7 +272,7 @@ def dump_variants_for_annotate_pd(annotation_db, batch_number, debug):
 @click.option('--adb', 'annotation_db', type=click.Path(exists=True), required=True, help="The duckdb database to store the annotation information")
 @click.option('--pd', '-p', 'annotate_pd', type=click.Path(exists=True), required=True, help="The CSV File produced from AnnotatePD to be imported into the annotation database")
 @click.option('--batch-number', '-b', type=click.INT, required=True, help="The batch number of this variant set")
-@click.option('--debug', '-d', is_flag=True, show_default=True, default=False, required=True, help="Print extra debugging output")
+@click.option('--debug', '-d', is_flag=True, show_default=True, default=False, required=False, help="Print extra debugging output")
 def import_annotate_pd(annotation_db, annotate_pd, batch_number, debug):
     """
     Dumps the vep information into an annotation duckdb
@@ -287,13 +287,14 @@ def import_annotate_pd(annotation_db, annotate_pd, batch_number, debug):
 @click.option('--adb', 'annotation_db', type=click.Path(exists=True), required=True, help="The annotation database")
 @click.option('--prefix', '-p', type=click.STRING, default="ch_pd", help="The output prefix e.g. <prefix>.all.csv")
 @click.option('--pvalue', '-v', type=click.FLOAT, default=1.260958e-09, help="The p-value cut-off value for the Fisher's exact test for the PoN")
-@click.option('--debug', '-d', is_flag=True, show_default=True, default=False, required=True, help="Print extra debugging output")
-def dump_ch_variants(mutect_db, vardict_db, annotation_db, prefix, pvalue, debug):
+@click.option('--ch_pd_one', is_flag=True, show_default=True, default=True, required=False, help="Only dump CH variants that are annotated as CH-PD == 1")
+@click.option('--debug', '-d', is_flag=True, show_default=True, default=False, required=False, help="Print extra debugging output")
+def dump_ch_variants(mutect_db, vardict_db, annotation_db, prefix, pvalue, ch_pd_one, debug):
     """
     Combines all information and outputs CH Variants
     """
     import ch.vdbtools.dump as dump
-    dump.dump_ch_variants(mutect_db, vardict_db, annotation_db, prefix, pvalue, debug)
+    dump.dump_ch_variants(mutect_db, vardict_db, annotation_db, prefix, pvalue, ch_pd_one, debug)
     log.logit(f"---> Successfully dumped CH Variants", color="green")
 
 @cli.command('reduce-db', short_help="Reduces the size of the mutect_db and vardict_db databases to only CH possible variants")
@@ -305,8 +306,8 @@ def dump_ch_variants(mutect_db, vardict_db, annotation_db, prefix, pvalue, debug
 @click.option('--adb', 'annotation_db', type=click.Path(exists=True), required=True, help="The annotation database")
 @click.option('--batch-number', '-b', type=click.INT, default=None, help="The batch number in case only want chromosome database for a subset")
 @click.option('--threads', 'cores', type=click.INT, required=False, show_default=True, default=1, help="Number of Threads used for parallelization")
-@click.option('--chromosome', '-c', type=click.STRING, default=None, help="The chromosome set of interest")
-@click.option('--debug', '-d', is_flag=True, show_default=True, default=False, required=True, help="Print extra debugging output")
+@click.option('--chromosome', '-c', type=click.STRING, default=None, required=False, help="The chromosome set of interest")
+@click.option('--debug', '-d', is_flag=True, show_default=True, default=False, required=False, help="Print extra debugging output")
 def dump_ch_variants(caller_db, caller, annotation_db, batch_number, chromosome, cores, debug):
     """
     Reduces the size of mutect_db and vardict_db to only include possible CH variants

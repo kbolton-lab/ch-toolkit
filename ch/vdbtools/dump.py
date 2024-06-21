@@ -12,6 +12,6 @@ def dump_variants_for_annotate_pd(annotation_db, batch_number, debug):
     import ch.vdbtools.handlers.annotations as annotate
     annotate.dump_variants_batch(annotation_db, batch_number, debug)
 
-def dump_ch_variants(mutect_db, vardict_db, annotation_db, prefix, pvalue, debug):
+def dump_ch_variants(mutect_db, vardict_db, annotation_db, prefix, pvalue, ch_pd_one, debug):
     import ch.vdbtools.analysis.ch as ch
-    ch.dump_ch_variants(mutect_db, vardict_db, annotation_db, prefix, pvalue, debug)
+    ch.dump_ch_variants(mutect_db, vardict_db, annotation_db, prefix, pvalue, ch_pd_one, debug)

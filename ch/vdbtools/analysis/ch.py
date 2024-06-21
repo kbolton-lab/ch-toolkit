@@ -125,7 +125,7 @@ def determine_pathogenicity(df, total_samples, debug):
     # Autofail Variants with NO support in B/B and Cosmic that have nsamples >20 and in non complex region
     vars, ct, bickGene, TSG_gene_list, gene_list, ZBTB33 = load_flat_databases()
 
-    df['sample_key'] = df['sample_name'] + df['key']
+    df['sample_key'] = df['sample_name'] + ' ' + df['key']
     df = df[~(df['n.HGVSc'].isna() & (df['heme_cosmic_count'] == 0) & (df['n_samples'] > 20) & (df['homopolymerCase'] == "") & (df['dust_score'] <= 7) & (~df['Gene'].isin(bickGene['Gene'])))]
     
     # Autofail Variants that are too recurrent
@@ -331,7 +331,7 @@ def determine_pathogenicity(df, total_samples, debug):
         ((df['Review'].str.contains("Long INDEL")) & (df['putative_driver'] == 1)) |
         ((df['Review'].str.contains("Complex INDEL")) & (df['putative_driver'] == 1)) |
         ((df['Review'].str.contains("High VAF")) & (df['putative_driver'] == 1)) |
-        ((df['Review'] == "Recurrent") & (df['putative_driver'] == 1)) |
+        ((df['Review'] == "|Recurrent") & (df['putative_driver'] == 1)) |
         ((df['Review'].str.contains("Homopolymer Region")) & (df['putative_driver'] == 1)) |
         ((df['Review'].str.contains("Bick's Email")) & (df['putative_driver'] == 1)) |
         ((df['Review'].str.contains("MW Review")) & (df['putative_driver'] == 0)) #|
@@ -354,7 +354,6 @@ def determine_pathogenicity(df, total_samples, debug):
     log.logit("Finished determining pathogenicity.")
     return review_df, pass_df, df
 
-
 # CH Definition
 # - ch_pd == 1
 # - Pass gnomAD Filter
@@ -371,16 +370,20 @@ def determine_pathogenicity(df, total_samples, debug):
 # - Median VAF <= 0.35 if Average VAF > 0.25 (At least 2 Samples) <- For Tumors add the B/B and COSMIC
 # - Calculate N Samples
 # - PoN Edge Case of 0
-def ch_to_df(temp_connection, mutect_db, vardict_db, annotation_db, pvalue, debug):
+def ch_to_df(temp_connection, mutect_db, vardict_db, annotation_db, pvalue, ch_pd_one, debug):
     log.logit(f"Processing variants from databases...")
     temp_connection.execute("PRAGMA memory_limit='16GB'")
     temp_connection.execute(f"ATTACH \'{mutect_db}\' as mutect_db (READ_ONLY)")
     temp_connection.execute(f"ATTACH \'{vardict_db}\' as vardict_db (READ_ONLY)")
     temp_connection.execute(f"ATTACH \'{annotation_db}\' as annotation_db (READ_ONLY)")
     total_sample = temp_connection.execute(f"SELECT COUNT(DISTINCT sample_id) FROM mutect_db.mutect").fetchone()[0]
+    if ch_pd_one:
+        ch_pd_string = f"(ch_pd == 1)"
+    else:
+        ch_pd_string = "TRUE"
     with indent(4, quote=' >'):
         log.logit(f"Creating the pd_filtered table...")
-        sql = """
+        sql = f"""
         CREATE TABLE pd_filtered AS
         SELECT *
         FROM annotation_db.pd as p
@@ -389,7 +392,8 @@ def ch_to_df(temp_connection, mutect_db, vardict_db, annotation_db, pvalue, debu
         WHERE (
             (max_gnomADe_AF_VEP < 0.005 OR max_gnomADe_AF_VEP is NULL) AND
             (max_gnomADg_AF_VEP < 0.005 OR max_gnomADg_AF_VEP is NULL) AND
-            (max_pop_gnomAD_AF < 0.0005 OR max_pop_gnomAD_AF is NULL)
+            (max_pop_gnomAD_AF < 0.0005 OR max_pop_gnomAD_AF is NULL) AND
+            {ch_pd_string}
         ) OR (vep.key = 'chr20:32434638:A:AG' OR vep.key = 'chr20:32434638:A:AGG');
         """
         if debug: log.logit(f"Executing: {sql}")
@@ -532,18 +536,22 @@ def ch_to_df(temp_connection, mutect_db, vardict_db, annotation_db, pvalue, debu
 def calculate_fishers_exact_for_df(df, debug):
     return df
 
-def dump_ch_variants(mutect_db, vardict_db, annotation_db, prefix, pvalue, debug):
+def dump_ch_variants(mutect_db, vardict_db, annotation_db, prefix, pvalue, ch_pd_one, debug):
     temp_connection = db.duckdb_connect_rw(f"temp_{prefix}.db", True)
-    total_sample, df = ch_to_df(temp_connection, mutect_db, vardict_db, annotation_db, pvalue, debug)
+    total_sample, df = ch_to_df(temp_connection, mutect_db, vardict_db, annotation_db, pvalue, ch_pd_one, debug)
     temp_connection.close()
     os.remove(f"temp_{prefix}.db")
     review_df, pass_df, df = determine_pathogenicity(df, total_sample, debug)
-    length = len(df)
+    length_all = len(df)
+    length_review = len(review_df)
+    length_pass = len(pass_df)
     #print(df)
     df.to_csv(f"{prefix}.all.csv", index=False, mode='w')
     review_df.to_csv(f"{prefix}.review.csv", index=False, mode='w')
     pass_df.to_csv(f"{prefix}.pass.csv", index=False, mode='w')
-    log.logit(f"{length} variants are putative drivers")
+    log.logit(f"{length_all} variants inside {prefix}.all.csv")
+    log.logit(f"{length_review} variants inside {prefix}.review.csv")
+    log.logit(f"{length_pass} variants inside {prefix}.pass.csv")
     return df
 
 def create_caller_filtered(connection, caller, chrom, outfile, debug):
