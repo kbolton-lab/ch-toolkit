@@ -2,7 +2,6 @@ args==0.1.0
 click==8.0.3
 clint==0.5.1
 duckdb==0.7.1
-fisher==0.1.10
 numpy==1.24.3
 pandas==2.0.0
 python-dateutil==2.8.2
