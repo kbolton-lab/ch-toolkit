@@ -107,7 +107,7 @@ def merge_batch_variants(db_path, variant_db, batch_number, debug, clobber):
 @click.option('--by_chromosome', '-c', is_flag=True, show_default=True, default=False, required=False, help="By chromosome or all at once")
 @click.option('--debug', '-d', is_flag=True, show_default=True, default=False, required=False, help="Print extra debugging output")
 def bcbio_filter(vardict_db, recalculate, low_depth_for_allele_frequency, total_depth, mean_quality_score, batch_number, by_chromosome, debug):
-    """
+    """ 
     Performs the BCBIO Filter on the Vardict Database: https://github.com/bcbio/bcbio-nextgen/blob/master/bcbio/variation/vardict.py#L251\n\n
     The variant_calling.wdl should automatically perform the BCBIO filter. However, if the filter_string was not properly set, this filter can be run at this step.\n
     As a rule of thumb, parameters for low-dp-af, total-depth, and mean-quality-score are calculated using a small subset then identifying the cut-off for 2% of the left side samples.\n

@@ -61,6 +61,9 @@ def near_BB_loci_HS(df_row, vars):
         # If the AA change is Terminating, we only want to select the Near Hotspots that are ALSO Terminating, or else it's comparing Apples to Oranges
         if 'Ter' in df_row['gene_aachange']:
             res = res[res['truncating'] == 'truncating']
+            # We only need to return truncating because in bick.bolton.vars3.txt the truncating is grouped by "truncating" so this column has the correct
+            # value for the loci count depending on whether or not it is a truncating mutation or not. n.loci.vep will have the TOTAL number
+            # e.g. If truncating = 9 and missense = 3, n.loci.vep = 12, and n.loci.truncating.vep = 9 or = 3 depending on which one it is
             return res.apply(lambda row: f"{row['gene_loci_vep']}: {row['n.loci.truncating.vep']}", axis=1).str.cat(sep=' | ') if not res.empty else ""
         else:
             res = res[res['truncating'] == 'not']
@@ -118,6 +121,46 @@ def near_COSMIC_loci_HS(df_row, ct):
             res = res.groupby('gene_loci_vep')[['cosmic_count.totals.c', 'heme_count.totals.c', 'myeloid_count.totals.c']].sum().reset_index()
             res = res[(res['cosmic_count.totals.c'] >= 25) | (res['heme_count.totals.c'] >= 10) | (res['myeloid_count.totals.c'] >= 5)]
             return res.apply(lambda row: f"{row['gene_loci_vep']}: {row['cosmic_count.totals.c']}, {row['heme_count.totals.c']}, {row['myeloid_count.totals.c']}", axis=1).str.cat(sep=' | ') if not res.empty else ""
+    else:
+        return ''
+    
+def near_loci_HS(df_row, data, type):
+    p = list(range(-3, 4))              # Establishes 3 AA downstream and upstream
+    n = list(range(-9, 10))             # Establishes the 9 nucleotides downstream and upstream
+
+    prot = [str(int(df_row['aa.pos'] + x)) for x in p]                  # e.g. DNMT3A_R882 would result in [879, 880, 881, 882, 883, 884, 885]
+    vector_p = pd.Series([df_row['SYMBOL'] + '_' + x for x in prot])    # which would result in [DNMT3A_879, DNMT3A_880, ...]
+    any_in_p = vector_p.isin(data['GENE.AA.POS'])                       # If any of these AA positions are inside vars, it means this mutation is NEAR a BB Hotspot
+    
+    nuc = [str(int(df_row['POS']) + x) for x in n]                      # e.g. DNMT3A_R882 would result in [25234364, 25234365, ...]
+    vector_n = pd.Series([df_row['CHROM'] + '_' + x for x in nuc])      # which would result in [chr2_25234364, chr2_25234365, ...]
+    any_in_n = vector_n.isin(data['CHROM.POS'])                         # Again, if any of these specific positions are inside vars... it means it is NEAR a BB Hotspot
+
+    if type == 'BB':
+        truncating_condition = data['n.loci.truncating.vep'] >= 5
+        truncating_column = 'n.loci.truncating.vep'
+    elif type == 'COSMIC':
+        truncating_condition = (data['cosmic_count.loci.truncating'] >= 25) | (data['heme_count.loci.truncating'] >= 10) | (data['myeloid_count.loci.truncating'] >= 5)
+        truncating_column = ['cosmic_count.loci.truncating', 'heme_count.loci.truncating', 'myeloid_count.loci.truncating']
+
+    # If at least one of the AA POS is true...
+    if any(any_in_p):  
+        res = data[(data['GENE.AA.POS'].isin(vector_p)) & truncating_condition][['gene_loci_vep', 'truncating', truncating_column]].drop_duplicates()
+        # If the AA change is Terminating, we only want to select the Near Hotspots that are ALSO Terminating, or else it's comparing Apples to Oranges
+        if 'Ter' in df_row['gene_aachange']:
+            res = res[res['truncating'] == True]
+        else:
+            res = res[res['truncating'] == False]
+        return res.apply(lambda row: f"{row['gene_loci_vep']}: {', '.join([str(row[col]) for col in truncating_column])}", axis=1).str.cat(sep=' | ') if not res.empty else ""
+    # Else check nucleotide if none of the AA positions are true...
+    elif any(any_in_n):
+        res = data[data['CHROM.POS'].isin(vector_n)][['gene_loci_vep', 'gene_cDNAchange']].drop_duplicates()
+        # Similar to Terminating, if the cDNAchange is a deletion, insertion, or duplication, we only want to compare to those results
+        if any(res['gene_cDNAchange'].str.contains('del|ins|dup')):
+            res = res[res['gene_cDNAchange'].str.contains('del|ins|dup')]
+        else:
+            res = res[~res['gene_cDNAchange'].str.contains('del|ins|dup')]
+        return res.apply(lambda row: f"{row['gene_loci_vep']}: {row['gene_cDNAchange']}", axis=1).str.cat(sep=' | ') if not res.empty else ""
     else:
         return ''
 
@@ -218,11 +261,12 @@ def determine_pathogenicity(df, total_samples, debug):
     df['pd_reason'] = np.select(
         [
             df['Gene'].isin(TSG_gene_list) & df['VariantClass'].isin(nonsense_mutation),
-            df['oncoKB'].str.contains("Oncogenic"),
+            df['oncoKB'].str.contains("Oncogenic") & (df['oncoKB_reviewed'] == True),
+            (df['oncoKB'] == "Likely Oncogenic") & (df['oncoKB_reviewed'] == False) & df['SIFT'].str.contains("deleterious") & df['PolyPhen'].str.contains("damaging"),
             df['Gene'].isin(gene_list) & df['VariantClass'].isin(missense_mutation) & ((df['n.HGVSp'] >= 10) | (df['n.HGVSc'] >= 5)),
             df['Gene'].isin(gene_list) & df['oncoKB'].str.contains("Neutral"),
             df['Gene'].isin(gene_list) & df['VariantClass'].isin(missense_mutation) & ((df['CosmicCount'] >= 10) | (df['heme_cosmic_count'] >= 5) | (df['myeloid_cosmic_count'] >= 1)),
-            df['Gene'].isin(gene_list) & df['VariantClass'].isin(missense_mutation) & ((df['n.loci.vep'] - df['n.loci.truncating.vep']) >= 5) & df['SIFT'].str.contains("deleterious") & df['PolyPhen'].str.contains("damaging"),
+            df['Gene'].isin(gene_list) & df['VariantClass'].isin(missense_mutation) & (df['n.loci.truncating.vep'] >= 5) & df['SIFT'].str.contains("deleterious") & df['PolyPhen'].str.contains("damaging"),
             df['Gene'].isin(gene_list) & df['VariantClass'].isin(missense_mutation) & ((df['nearBBLogic']) | (df['nearCosmicHemeLogic'])) & df['SIFT'].str.contains("deleterious") & df['PolyPhen'].str.contains("damaging"),
             (df['Gene'] == "SRSF2") & df['VariantClass'].isin(missense_mutation) & (df['aa.pos'] == 95),
             (df['Gene'] == "SF3B1") & df['VariantClass'].isin(missense_mutation) & df['aa.pos'].isin(SF3B1_positions),
@@ -239,6 +283,7 @@ def determine_pathogenicity(df, total_samples, debug):
         [
             "Nonsense Mutation in TSG",
             "OncoKB",
+            "OncoKB Likely Oncogenic + SIFT/PolyPhen",
             "B/B Hotspot >= 10",
             "Not PD",
             "COSMIC",
@@ -258,9 +303,45 @@ def determine_pathogenicity(df, total_samples, debug):
         ],
         default="Not PD"
     )
+
+    # Creating an expanded column for more in-depth analysis
+    putative_driver_conditions = [
+        (df['Gene'].isin(TSG_gene_list) & df['VariantClass'].isin(nonsense_mutation), "Nonsense Mutation in TSG"),
+        (df['oncoKB'].str.contains("Oncogenic") & (df['oncoKB_reviewed'] == True), "OncoKB"),
+        ((df['oncoKB'] == "Likely Oncogenic") & (df['oncoKB_reviewed'] == False) & df['SIFT'].str.contains("deleterious") & df['PolyPhen'].str.contains("damaging"), "OncoKB Likely Oncogenic + SIFT/PolyPhen"),
+        (df['Gene'].isin(gene_list) & df['VariantClass'].isin(missense_mutation) & ((df['n.HGVSp'] >= 10) | (df['n.HGVSc'] >= 5)), "B/B Hotspot >= 10"),
+        (df['Gene'].isin(gene_list) & df['VariantClass'].isin(missense_mutation) & ((df['CosmicCount'] >= 10) | (df['heme_cosmic_count'] >= 5) | (df['myeloid_cosmic_count'] >= 1)), "COSMIC"),
+        (df['Gene'].isin(gene_list) & df['VariantClass'].isin(missense_mutation) & (df['n.loci.truncating.vep'] >= 5) & df['SIFT'].str.contains("deleterious") & df['PolyPhen'].str.contains("damaging"), "Loci + SIFT/PolyPhen"),
+        (df['Gene'].isin(gene_list) & df['VariantClass'].isin(missense_mutation) & ((df['nearBBLogic']) | (df['nearCosmicHemeLogic'])) & df['SIFT'].str.contains("deleterious") & df['PolyPhen'].str.contains("damaging"), "Near Hotspot + SIFT/PolyPhen"),
+        ((df['Gene'] == "SRSF2") & df['VariantClass'].isin(missense_mutation) & (df['aa.pos'] == 95), "SRSF2 Hotspot"),
+        ((df['Gene'] == "SF3B1") & df['VariantClass'].isin(missense_mutation) & df['aa.pos'].isin(SF3B1_positions), "SF3B1 Hotspot"),
+        ((df['Gene'] == "IDH1") & df['VariantClass'].isin(missense_mutation) & (df['aa.pos'] == 132), "IDH1 Hotspot"),
+        ((df['Gene'] == "IDH2") & df['VariantClass'].isin(missense_mutation) & ((df['aa.pos'] == 140) | (df['aa.pos'] == 172)), "IDH2 Hotspot"),
+        ((df['Gene'] == "PPM1D") & df['VariantClass'].isin(nonsense_mutation) & (df['EXON'] == "6/6"), "Nonsense Mutation on Exon 6"),
+        (df['Gene'].isin(gene_list) & df['VariantClass'].isin(missense_mutation) & (df['n.HGVSp'] >= 1) & (df['SIFT'].str.contains("deleterious") | df['PolyPhen'].str.contains("damaging")), "B/B Hotspot + SIFT/PolyPhen"),
+        (df['Gene'].isin(TSG_gene_list) & df['VariantClass'].isin(["splice_donor_variant", "splice_acceptor_variant", "splice_region_variant"]) & ~(df['Consequence'].str.contains('|'.join(splicingSynonymous))), "Splicing Mutation"),
+        (df['Gene'].isin(TSG_gene_list) & df['clinvar_CLNSIG'].isin(clinvar_sig_terms), "ClinVar"),
+        (((df['Gene'] == "ZBTB33") & df['VariantClass'].isin(missense_mutation) & df['AAchange'].isin(ZBTB33)) | (df['Gene'].isin(bickGene['Gene'].unique()) & df['VariantClass'].isin(nonsense_mutation)), "Bick's Email")
+    ]
+    df['pd_reason_expanded'] = ""
+    for condition, label in putative_driver_conditions:
+        df.loc[condition, 'Review'] = df.loc[condition, 'Review'] + '|' + label
+    df.loc[(df['Gene'].isin(gene_list)) & (df['oncoKB'] == "Neutral"), 'pd_reason_expanded'] = "Not PD"
+    df.loc[(df['Gene'].isin(gene_list)) & (df['Consequence_VEP'].str.contains('|'.join(splicingSynonymous))), 'pd_reason_expanded'] = "Not PD"
+    df.loc[df['pd_reason_expanded'] == "", 'pd_reason_expanded'] = "Not PD"
+
     # OncoKB API automatically classifies ALL splicing mutations as oncogenic, however if the mutation is synonymous, then we have to change it
     df.loc[(df['oncoKB'].str.contains("Oncogenic")) & df['Consequence'].str.contains('|'.join(splicingSynonymous)) & ~(df['clinvar_CLNSIG'].isin(clinvar_sig_terms)), 'pd_reason'] = "Not PD"
+    df.loc[(df['oncoKB'].str.contains("Oncogenic")) & df['Consequence'].str.contains('|'.join(splicingSynonymous)) & ~(df['clinvar_CLNSIG'].isin(clinvar_sig_terms)), 'pd_reason_expanded'] = "Not PD"
     df['putative_driver'] = np.where(df['pd_reason'] != "Not PD", 1, 0)
+
+    test_same_pd_reason = df[['key', 'pd_reason', 'putative_driver', 'pd_reason_expanded']]
+    test_same_pd_reason = test_same_pd_reason[~test_same_pd_reason['pd_reason'].apply(lambda x: any(test_same_pd_reason['pd_reason_expanded'].str.contains(x)))]
+
+    if test_same_pd_reason.empty:
+        print("pd_reason and pd_reason_expanded agree")
+    else:
+        print("ERROR: pd_reason and pd_reason_expanded disagree")
 
     # SpliceAI
     if 'SpliceAI_pred' in df.columns:
