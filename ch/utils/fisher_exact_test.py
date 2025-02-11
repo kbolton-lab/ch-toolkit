@@ -1,6 +1,5 @@
 import decimal
 import numpy as np
-from scipy.stats import fisher_exact
 from numba import njit
 
 # Fisher Test using fisher package (much faster)
