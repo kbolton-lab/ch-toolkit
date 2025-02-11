@@ -61,6 +61,7 @@ def prepareAnnotatePdData(df, vars, debug):
                   "%3D":"=", "=":"="}
 
     df['AAchange'] = df['HGVSp'].str.extract(r'(.*p\.)(.*)')[1]
+    df['AAchange'] = df['AAchange'].astype("string")
     df.replace({'AAchange': AminoAcids}, inplace=True, regex=True)
     df['loci_p'] = df["AAchange"].str.extract(r'(.[0-9]+)')
     df['gene_loci_p'] = df['SYMBOL']+"_"+df['loci_p']
