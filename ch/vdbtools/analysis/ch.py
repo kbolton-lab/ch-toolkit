@@ -329,7 +329,7 @@ def determine_pathogenicity(df, total_samples, debug):
     ]
     df['pd_reason_expanded'] = ""
     for condition, label in putative_driver_conditions:
-        df.loc[condition, 'Review'] = df.loc[condition, 'Review'] + '|' + label
+        df.loc[condition, 'pd_reason_expanded'] = df.loc[condition, 'pd_reason_expanded'] + '|' + label
     df.loc[(df['Gene'].isin(gene_list)) & (df['oncoKB'] == "Neutral"), 'pd_reason_expanded'] = "Not PD"
     df.loc[(df['Gene'].isin(gene_list)) & (df['Consequence'].str.contains('|'.join(splicingSynonymous))), 'pd_reason_expanded'] = "Not PD"
     df.loc[df['pd_reason_expanded'] == "", 'pd_reason_expanded'] = "Not PD"
