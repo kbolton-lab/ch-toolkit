@@ -331,7 +331,7 @@ def determine_pathogenicity(df, total_samples, debug):
     for condition, label in putative_driver_conditions:
         df.loc[condition, 'Review'] = df.loc[condition, 'Review'] + '|' + label
     df.loc[(df['Gene'].isin(gene_list)) & (df['oncoKB'] == "Neutral"), 'pd_reason_expanded'] = "Not PD"
-    df.loc[(df['Gene'].isin(gene_list)) & (df['Consequence_VEP'].str.contains('|'.join(splicingSynonymous))), 'pd_reason_expanded'] = "Not PD"
+    df.loc[(df['Gene'].isin(gene_list)) & (df['Consequence'].str.contains('|'.join(splicingSynonymous))), 'pd_reason_expanded'] = "Not PD"
     df.loc[df['pd_reason_expanded'] == "", 'pd_reason_expanded'] = "Not PD"
 
     # OncoKB API automatically classifies ALL splicing mutations as oncogenic, however if the mutation is synonymous, then we have to change it
