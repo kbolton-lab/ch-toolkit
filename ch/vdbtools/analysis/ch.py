@@ -29,10 +29,14 @@ def load_flat_databases():
     ct['gene_cDNAchange'] = ct['gene'] + '_' + ct['cDNAchange']
     ct['gene_aachange'] = ct['gene'] + '_' + ct['AAchange']
 
+    custom_gene_rules = {"PPM1D", "SRSF2", "SF3B1", "IDH1", "IDH2"}
     bickGene = pd.read_csv(pd_table, sep='\t')
     bickGene = bickGene[bickGene['source'] == 'Bick_email']
     gene_list = pd.read_csv(gene_list, sep=',')
+    gene_list = list(set(gene_list) - custom_gene_rules)
     TSG_gene_list = gene_list[gene_list['isTSG'] == 1]['Gene']
+    TSG_gene_list = list(set(TSG_gene_list) - custom_gene_rules)
+
     gene_list = gene_list['Gene']
 
     ZBTB33 = bickGene.loc[bickGene['Gene'] == "ZBTB33", ['aa_ref', 'aa_pos', 'aa_alt']]
@@ -261,8 +265,8 @@ def determine_pathogenicity(df, total_samples, debug):
     df['pd_reason'] = np.select(
         [
             df['Gene'].isin(TSG_gene_list) & df['VariantClass'].isin(nonsense_mutation),
-            df['oncoKB'].str.contains("Oncogenic") & (df['oncoKB_reviewed'] == True),
-            (df['oncoKB'] == "Likely Oncogenic") & (df['oncoKB_reviewed'] == False) & df['SIFT'].str.contains("deleterious") & df['PolyPhen'].str.contains("damaging"),
+            df['Gene'].isin(gene_list) & df['oncoKB'].str.contains("Oncogenic") & (df['oncoKB_reviewed'] == True),
+            df['Gene'].isin(gene_list) & (df['oncoKB'] == "Likely Oncogenic") & (df['oncoKB_reviewed'] == False) & df['SIFT'].str.contains("deleterious") & df['PolyPhen'].str.contains("damaging"),
             df['Gene'].isin(gene_list) & df['VariantClass'].isin(missense_mutation) & ((df['n.HGVSp'] >= 10) | (df['n.HGVSc'] >= 5)),
             df['Gene'].isin(gene_list) & df['oncoKB'].str.contains("Neutral"),
             df['Gene'].isin(gene_list) & df['VariantClass'].isin(missense_mutation) & ((df['CosmicCount'] >= 10) | (df['heme_cosmic_count'] >= 5) | (df['myeloid_cosmic_count'] >= 1)),
@@ -307,8 +311,8 @@ def determine_pathogenicity(df, total_samples, debug):
     # Creating an expanded column for more in-depth analysis
     putative_driver_conditions = [
         (df['Gene'].isin(TSG_gene_list) & df['VariantClass'].isin(nonsense_mutation), "Nonsense Mutation in TSG"),
-        (df['oncoKB'].str.contains("Oncogenic") & (df['oncoKB_reviewed'] == True), "OncoKB"),
-        ((df['oncoKB'] == "Likely Oncogenic") & (df['oncoKB_reviewed'] == False) & df['SIFT'].str.contains("deleterious") & df['PolyPhen'].str.contains("damaging"), "OncoKB Likely Oncogenic + SIFT/PolyPhen"),
+        (df['Gene'].isin(gene_list) & df['oncoKB'].str.contains("Oncogenic") & (df['oncoKB_reviewed'] == True), "OncoKB"),
+        (df['Gene'].isin(gene_list) & (df['oncoKB'] == "Likely Oncogenic") & (df['oncoKB_reviewed'] == False) & df['SIFT'].str.contains("deleterious") & df['PolyPhen'].str.contains("damaging"), "OncoKB Likely Oncogenic + SIFT/PolyPhen"),
         (df['Gene'].isin(gene_list) & df['VariantClass'].isin(missense_mutation) & ((df['n.HGVSp'] >= 10) | (df['n.HGVSc'] >= 5)), "B/B Hotspot >= 10"),
         (df['Gene'].isin(gene_list) & df['VariantClass'].isin(missense_mutation) & ((df['CosmicCount'] >= 10) | (df['heme_cosmic_count'] >= 5) | (df['myeloid_cosmic_count'] >= 1)), "COSMIC"),
         (df['Gene'].isin(gene_list) & df['VariantClass'].isin(missense_mutation) & (df['n.loci.truncating.vep'] >= 5) & df['SIFT'].str.contains("deleterious") & df['PolyPhen'].str.contains("damaging"), "Loci + SIFT/PolyPhen"),
@@ -365,6 +369,7 @@ def determine_pathogenicity(df, total_samples, debug):
 
     unique_genes = bickGene[bickGene['Gene'] != "ZBTB33"]['Gene'].unique()
     conditions = [
+        ((df['pd_reason_expanded'] == "|OncoKB" | df['pd_reason_expanded'] == "|OncoKB Likely Oncogenic + SIFT/PolyPhen") & (df['VariantClass'].isin(missense_mutation)), "OncoKB Only Missense Variant"),
         ((df['REF'].str.len() > 5) | (df['ALT'].str.len() > 5), "Long INDEL"),
         ((df['REF'].str.len() >= 2) & (df['ALT'].str.len() >= 2), "Complex INDEL"),
         ((df['average_af'] >= 0.2), "High VAF"),
@@ -409,6 +414,7 @@ def determine_pathogenicity(df, total_samples, debug):
         df['putative_driver'] = np.where(df['pd_reason'] != "Not PD", 1, 0)
 
     review_df = df.loc[
+        ((df['Review'].str.contains("OncoKB Only Missense Variant")) & (df['putative_driver'] == 1)) |
         ((df['Review'].str.contains("Long INDEL")) & (df['putative_driver'] == 1)) |
         ((df['Review'].str.contains("Complex INDEL")) & (df['putative_driver'] == 1)) |
         ((df['Review'].str.contains("High VAF")) & (df['putative_driver'] == 1)) |
